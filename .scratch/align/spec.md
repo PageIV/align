@@ -147,9 +147,10 @@ experimental: openai/modelContext, openai/message{draft}, openai/find, openai/fi
 
 ### 本 repo 的开发回路
 
-- 开发用 marketplace 在 `~/.codex/dev-marketplaces/align-dev/`，`plugins/align` 是指向本 repo 的符号链接。**符号链接被跟随**，所以改 repo 后重启 app 即可，不需要重新复制文件。
-- 注册只有两段：`[marketplaces.align-dev]` 与 `[plugins."align@align-dev"] enabled = true`。
-- **宿主会缓存面板资源**：改完 `ui/panel.html` 后必须重启 app 才看得到新版（实测新标记没生效，进来的仍是旧标记）。别指望热更新。
+- 开发用 marketplace 在 `~/.codex/dev-marketplaces/align-dev/`，`plugins/align` 是指向本 repo 的符号链接。注册只有两段：`[marketplaces.align-dev]` 与 `[plugins."align@align-dev"] enabled = true`。
+- **宿主会把插件物化（复制）到自己的缓存**：`~/.codex/plugins/cache/<marketplace>/<plugin>/<version>/`。跑的是那份副本，不是这个仓库——符号链接只在物化那一刻被跟随。
+- **版本号不变就不会重新物化。** 实测：改完 `server.mjs` 与面板后重启，跑的还是旧副本，新工具根本不存在。所以开发循环是"改代码 → 提升 `plugin.json` 的 version → 重启 app"。这一条推翻了我早先"改 repo 重启即可"的说法。
+- 由此也解释了之前那次"新标记没生效"：既是面板资源被缓存，也是整份插件没换。诊断时先看缓存目录里的版本号，比猜快。
 
 ### 仍未验证
 

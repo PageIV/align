@@ -1,6 +1,6 @@
 {
   "name": "align",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Interrogate an answer in an isolated side chat, then land the confirmed items so later turns stay aligned.",
   "author": {
     "name": "page"

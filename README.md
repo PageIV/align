@@ -39,7 +39,18 @@ source = "/Users/page/.codex/dev-marketplaces/align-dev"
 enabled = true
 ```
 
-**改完必须重启 app。** 宿主会缓存 MCP App 的资源，改 `ui/panel.html` 后不重启看不到新版本——实测踩过。
+**改完必须提升版本号，然后重启 app。**
+
+宿主不是直接读这个仓库。它会先把插件**物化**（复制）到
+`~/.codex/plugins/cache/<marketplace>/<plugin>/<version>/`，之后跑的是那份副本。版本号不变，重启也不会重新复制——实测踩过：改完 `server.mjs` 和面板，重启后跑的还是旧副本，新工具压根不存在。
+
+所以开发循环是三步：
+
+1. 改代码。
+2. 改 `.codex-plugin/plugin.json` 里的 `version`（0.0.2 → 0.0.3 …）。
+3. 重启 app。
+
+想确认生效没有，看 `~/.codex/plugins/cache/align-dev/align/` 下有没有出现新的版本目录。
 
 跑测试：
 
