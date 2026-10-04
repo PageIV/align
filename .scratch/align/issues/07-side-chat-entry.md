@@ -25,3 +25,6 @@ Type: task
 - `.scratch/align/spec.md` 的流程 1–3
 - `GLOSSARY.md`：侧聊
 
+## 实现期发现的约束
+
+MCP server 的工作目录是**插件目录**，不是用户的项目。所以主 Agent 调 `align_review` 时**必须把当前工作区的绝对路径作为 `root` 传进去**；省略的话会落到插件目录上，把对齐记录写进仓库自己身上。
