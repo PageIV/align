@@ -1,6 +1,7 @@
 # 01 — 仓库起步
 
-Status: open
+Status: resolved
+Resolved in: bf18930
 Blocked by: 无
 Type: task
 
@@ -23,4 +24,3 @@ Type: task
 ## 上下文指针
 
 - `.scratch/align/spec.md` 的"本 repo 的开发回路"
-

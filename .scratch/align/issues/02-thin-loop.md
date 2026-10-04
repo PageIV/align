@@ -1,6 +1,7 @@
 # 02 — 端到端最薄闭环
 
-Status: open
+Status: resolved
+Resolved in: bf18930
 Blocked by: 01
 Type: task
 
@@ -39,4 +40,3 @@ Type: task
 - 面板资源被宿主缓存：改 `ui/panel.html` 后必须重启 app。
 - CSP 域名列表全空：CSS/JS 必须内联。
 - 侧边面板约 371px 宽。
-
