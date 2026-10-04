@@ -5,6 +5,8 @@
   "type": "module",
   "description": "Codex plugin: interrogate an answer in a side chat, then land the confirmed items so later turns stay aligned.",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "plugin:install": "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex plugin add align@align-dev",
+    "plugin:status": "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex plugin list"
   }
 }

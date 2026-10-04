@@ -148,9 +148,11 @@ experimental: openai/modelContext, openai/message{draft}, openai/find, openai/fi
 ### 本 repo 的开发回路
 
 - 开发用 marketplace 在 `~/.codex/dev-marketplaces/align-dev/`，`plugins/align` 是指向本 repo 的符号链接。注册只有两段：`[marketplaces.align-dev]` 与 `[plugins."align@align-dev"] enabled = true`。
-- **宿主会把插件物化（复制）到自己的缓存**：`~/.codex/plugins/cache/<marketplace>/<plugin>/<version>/`。跑的是那份副本，不是这个仓库——符号链接只在物化那一刻被跟随。
-- **版本号不变就不会重新物化。** 实测：改完 `server.mjs` 与面板后重启，跑的还是旧副本，新工具根本不存在。所以开发循环是"改代码 → 提升 `plugin.json` 的 version → 重启 app"。这一条推翻了我早先"改 repo 重启即可"的说法。
-- 由此也解释了之前那次"新标记没生效"：既是面板资源被缓存，也是整份插件没换。诊断时先看缓存目录里的版本号，比猜快。
+- **宿主把插件物化（复制）到自己的缓存**：`~/.codex/plugins/cache/<marketplace>/<plugin>/<version>/`。跑的是那份副本，不是这个仓库——源码目录只在安装那一刻被读一次。符号链接只在那一刻被跟随。
+- **版本号不变就不会重装。** 实测：改完 `server.mjs` 与面板后重启，跑的还是旧副本，新工具不存在。
+- **开发循环（已验证）**：改代码 → 提升 `plugin.json` 的 version → `codex plugin add align@align-dev` → 重启 app。`codex plugin add` 会替换旧版本目录，缓存里不会堆积。
+- **诊断口诀**：`codex plugin list` 里宿主自报的 VERSION 与仓库清单不一致，就等于"没重装"。这一条比看文件时间戳快也准——宿主的记录是它自己写下的，不是我们的推断。
+- 这一节推翻了我早先"符号链接被跟随、改 repo 重启即可"的说法。当时那个结论是从"插件能加载"倒推的，证据不足。
 
 ### 仍未验证
 

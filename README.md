@@ -39,18 +39,21 @@ source = "/Users/page/.codex/dev-marketplaces/align-dev"
 enabled = true
 ```
 
-**改完必须提升版本号，然后重启 app。**
+**改完要重新安装，然后重启 app。**
 
-宿主不是直接读这个仓库。它会先把插件**物化**（复制）到
-`~/.codex/plugins/cache/<marketplace>/<plugin>/<version>/`，之后跑的是那份副本。版本号不变，重启也不会重新复制——实测踩过：改完 `server.mjs` 和面板，重启后跑的还是旧副本，新工具压根不存在。
+宿主不是直接读这个仓库。它把插件**物化（复制）**到
+`~/.codex/plugins/cache/<marketplace>/<plugin>/<version>/`，之后跑的是那份副本；源码目录只在安装那一刻被读一次。
 
-所以开发循环是三步：
+实测踩过：改完 `server.mjs` 和面板后重启，跑的还是旧副本，新工具压根不存在——版本号没变，宿主就认为无需重装。
+
+开发循环（已验证）：
 
 1. 改代码。
-2. 改 `.codex-plugin/plugin.json` 里的 `version`（0.0.2 → 0.0.3 …）。
-3. 重启 app。
+2. 把 `.codex-plugin/plugin.json` 里的 `version` 提升一位。
+3. `npm run plugin:install` —— 让宿主把新版本物化进缓存。装完会**替换**掉旧版本目录，不会堆积。
+4. 重启 app。
 
-想确认生效没有，看 `~/.codex/plugins/cache/align-dev/align/` 下有没有出现新的版本目录。
+排查口诀：**先看 `npm run plugin:status` 里宿主眼里的版本号**。它和你清单里的版本不一致，就是没重装，别去猜别的地方。这个版本号来自宿主自己的记录，比看文件时间戳快也准。
 
 跑测试：
 
