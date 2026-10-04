@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <title>align</title>
+    <style>
+      :root { color-scheme: light dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 14px;
+        font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      h1 { font-size: 14px; margin: 0 0 4px; }
+      .muted { opacity: 0.7; margin: 0 0 12px; }
+      .candidate {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 6px 8px;
+        padding: 8px;
+        border: 1px solid rgba(127, 127, 127, 0.3);
+        border-radius: 8px;
+        margin-bottom: 8px;
+      }
+      .candidate input[type="checkbox"] { margin-top: 3px; }
+      .candidate .statement { grid-column: 2; word-break: break-word; }
+      .candidate select {
+        grid-column: 2;
+        font: inherit;
+        padding: 3px 6px;
+        border-radius: 6px;
+        border: 1px solid rgba(127, 127, 127, 0.4);
+        background: transparent;
+        color: inherit;
+      }
+      textarea {
+        width: 100%;
+        min-height: 56px;
+        font: inherit;
+        padding: 6px;
+        border-radius: 6px;
+        border: 1px solid rgba(127, 127, 127, 0.4);
+        background: transparent;
+        color: inherit;
+        resize: vertical;
+      }
+      .row { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+      button {
+        font: inherit;
+        padding: 6px 12px;
+        border-radius: 6px;
+        border: 1px solid currentColor;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+      }
+      button:hover:not(:disabled) { background: rgba(127, 127, 127, 0.15); }
+      button:disabled { opacity: 0.45; cursor: default; }
+      .scope { opacity: 0.7; }
+      .result {
+        margin-top: 12px;
+        padding: 8px;
+        border-radius: 6px;
+        background: rgba(127, 127, 127, 0.12);
+        font-size: 12px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .result:empty { display: none; }
+      .hint { font-size: 11px; opacity: 0.65; margin-top: 8px; }
+    </style>
+  </head>
+  <body>
+    <h1>对齐</h1>
+    <p class="muted" id="status">正在与宿主握手…</p>
+
+    <div id="candidates"></div>
+
+    <textarea id="draft" placeholder="再加一条断言…"></textarea>
+
+    <div class="row">
+      <button id="land" disabled>落地到项目层</button>
+      <span class="scope">作用域：项目层</span>
+    </div>
+
+    <p class="hint">
+      项目层写进 <code>ALIGNMENT.md</code>，并更新 <code>AGENTS.md</code> 里的受管区块——每轮自动生效，活过新会话。
+    </p>
+
+    <div class="result" id="result"></div>
+
+    <script>
+      (() => {
+        const TYPES = [
+          ["concept-alignment", "概念对齐"],
+          ["error-correction", "错误纠正"],
+          ["direction-correction", "方向纠偏"],
+          ["detail-completion", "细节填充"]
+        ];
+
+        const statusEl = document.getElementById("status");
+        const candidatesEl = document.getElementById("candidates");
+        const draftEl = document.getElementById("draft");
+        const landEl = document.getElementById("land");
+        const resultEl = document.getElementById("result");
+
+        let nextId = 1;
+        const pending = new Map();
+        const context = { root: null, candidates: [] };
+
+        function request(method, params) {
+          const id = nextId++;
+          window.parent.postMessage({ jsonrpc: "2.0", id, method, params }, "*");
+          return new Promise((resolve) => pending.set(id, resolve));
+        }
+
+        function notify(method, params) {
+          window.parent.postMessage({ jsonrpc: "2.0", method, params }, "*");
+        }
+
+        function renderCandidates() {
+          candidatesEl.textContent = "";
+
+          context.candidates.forEach((candidate, index) => {
+            const row = document.createElement("div");
+            row.className = "candidate";
+
+            const box = document.createElement("input");
+            box.type = "checkbox";
+            box.checked = candidate.selected !== false;
+            box.dataset.index = String(index);
+
+            const statement = document.createElement("div");
+            statement.className = "statement";
+            statement.textContent = candidate.statement;
+
+            const select = document.createElement("select");
+            for (const [slug, label] of TYPES) {
+              const option = document.createElement("option");
+              option.value = slug;
+              option.textContent = label;
+              if ((candidate.type ?? TYPES[0][0]) === slug) option.selected = true;
+              select.append(option);
+            }
+
+            row.append(box, statement, select);
+            candidatesEl.append(row);
+          });
+        }
+
+        function collect() {
+          const items = [];
+
+          for (const row of candidatesEl.querySelectorAll(".candidate")) {
+            const box = row.querySelector('input[type="checkbox"]');
+            const select = row.querySelector("select");
+            if (!box.checked) continue;
+            const candidate = context.candidates[Number(box.dataset.index)];
+            items.push({ statement: candidate.statement, type: select.value });
+          }
+
+          const draft = draftEl.value.trim();
+          if (draft) items.push({ statement: draft, type: TYPES[0][0] });
+
+          return items;
+        }
+
+        window.addEventListener("message", (event) => {
+          const data = event.data;
+          if (!data || typeof data !== "object" || data.jsonrpc !== "2.0") return;
+
+          if (data.id !== undefined && pending.has(data.id)) {
+            const resolve = pending.get(data.id);
+            pending.delete(data.id);
+            resolve(data);
+            return;
+          }
+
+          if (data.method === "ui/notifications/tool-result") {
+            const payload = data.params?.structuredContent;
+            if (!payload) return;
+            context.root = payload.root ?? null;
+            context.candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
+            renderCandidates();
+            landEl.disabled = false;
+          }
+        });
+
+        landEl.addEventListener("click", async () => {
+          const items = collect();
+          if (items.length === 0) {
+            resultEl.textContent = "没有勾选任何条目，也没有新写的断言。";
+            return;
+          }
+
+          landEl.disabled = true;
+          resultEl.textContent = "正在写入…";
+
+          const response = await request("tools/call", {
+            name: "align_commit",
+            arguments: { items, root: context.root ?? undefined }
+          });
+
+          landEl.disabled = false;
+
+          if (response?.error) {
+            resultEl.textContent = `失败：${response.error.message}`;
+            return;
+          }
+
+          const created = response?.result?.structuredContent?.created ?? [];
+          resultEl.textContent = created.length
+            ? `已落地 ${created.length} 条：\n${created
+                .map((item) => `${item.id} · ${item.type} · ${item.statement}`)
+                .join("\n")}`
+            : "没有新增条目。";
+        });
+
+        (async () => {
+          const response = await request("ui/initialize", {
+            appInfo: { name: "align-panel", version: "0.0.1" },
+            appCapabilities: {},
+            protocolVersion: "2025-11-21"
+          });
+
+          const result = response?.result ?? {};
+          statusEl.textContent = result.protocolVersion
+            ? `已握手（${result.protocolVersion}）`
+            : "握手未返回协议版本";
+
+          notify("ui/notifications/initialized", {});
+          landEl.disabled = false;
+        })();
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,23 @@
+{
+  "name": "align",
+  "version": "0.0.1",
+  "description": "Interrogate an answer in an isolated side chat, then land the confirmed items so later turns stay aligned.",
+  "author": {
+    "name": "page"
+  },
+  "license": "MIT",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Align",
+    "shortDescription": "Keep the agent aligned with what you confirmed",
+    "longDescription": "Ask about an answer without derailing the main thread, pick the assertions you agree with, and land them: project-scoped items go into ALIGNMENT.md plus a managed block in AGENTS.md, so later turns carry them without you repeating yourself.",
+    "developerName": "page",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive"
+    ],
+    "defaultPrompt": [
+      "Open the alignment panel for the last answer"
+    ]
+  }
+}
