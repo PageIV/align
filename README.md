@@ -12,6 +12,12 @@
    - **项目层**：写 `ALIGNMENT.md` 并更新 `AGENTS.md` 里的受管区块——每轮自动生效，活过新会话。
    - **线程层**：用 `ui/update-model-context` 附着到你下一条消息上，一次性，之后靠对话历史承重。
 
+## 怎么打开面板
+
+**面板不是网页。** 它由主 Agent 调用 `align_review` 打开，作为 MCP App 内联渲染在对话里（可以再展开成侧边面板）。
+
+直接在浏览器里打开 `ui/panel.html` 是不行的：那里没有 MCP 宿主，`ui/initialize` 没人应答，`tools/call` 也没人转发，落地按钮点了不会有任何反应。面板现在会直说这件事，而不是让你对着一个死按钮猜。
+
 ## 开发
 
 插件以本地 marketplace 的方式加载，`plugins/align` 是指向本仓库的符号链接：

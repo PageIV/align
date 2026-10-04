@@ -105,6 +105,7 @@
         const resultEl = document.getElementById("result");
 
         let nextId = 1;
+        let hostReady = false;
         const pending = new Map();
         const context = { root: null, candidates: [] };
 
@@ -146,6 +147,16 @@
             row.append(box, statement, select);
             candidatesEl.append(row);
           });
+
+          updateLandState();
+        }
+
+        /** 按钮只在真的有东西可落地、且宿主已经握手时才亮。 */
+        function updateLandState() {
+          const hasWork =
+            context.candidates.some((candidate) => candidate.selected !== false) ||
+            draftEl.value.trim() !== "";
+          landEl.disabled = !hostReady || !hasWork;
         }
 
         function collect() {
@@ -182,7 +193,7 @@
             context.root = payload.root ?? null;
             context.candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
             renderCandidates();
-            landEl.disabled = false;
+            updateLandState();
           }
         });
 
@@ -216,20 +227,48 @@
             : "没有新增条目。";
         });
 
+        function withTimeout(promise, ms) {
+          return Promise.race([
+            promise,
+            new Promise((resolve) => setTimeout(() => resolve(null), ms))
+          ]);
+        }
+
+        /** 没有宿主时别装作能用——把原因说出来，别让人对着一个死按钮猜。 */
+        function noHost(message) {
+          hostReady = false;
+          statusEl.textContent = message;
+          landEl.disabled = true;
+          draftEl.disabled = true;
+        }
+
+        draftEl.addEventListener("input", updateLandState);
+
         (async () => {
-          const response = await request("ui/initialize", {
-            appInfo: { name: "align-panel", version: "0.0.1" },
-            appCapabilities: {},
-            protocolVersion: "2025-11-21"
-          });
+          if (window.parent === window) {
+            noHost("这里没有 MCP 宿主。这个面板只能在对话里由 align_review 打开，不能当普通网页打开。");
+            return;
+          }
+
+          const response = await withTimeout(
+            request("ui/initialize", {
+              appInfo: { name: "align-panel", version: "0.0.1" },
+              appCapabilities: {},
+              protocolVersion: "2025-11-21"
+            }),
+            2000
+          );
 
           const result = response?.result ?? {};
-          statusEl.textContent = result.protocolVersion
-            ? `已握手（${result.protocolVersion}）`
-            : "握手未返回协议版本";
+          if (!result.protocolVersion) {
+            noHost("宿主没有回应握手。这个面板只能在对话里由 align_review 打开。");
+            return;
+          }
 
+          hostReady = true;
+          statusEl.textContent = `已握手（${result.protocolVersion}）`;
           notify("ui/notifications/initialized", {});
-          landEl.disabled = false;
+          updateLandState();
         })();
       })();
     </script>
