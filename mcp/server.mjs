@@ -71,6 +71,18 @@ const TOOLS = [
     }
   },
   {
+    name: "align_list",
+    title: "看当前对齐了什么",
+    description: "读回账本，列出当前生效与已失效的已确认项。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        root: { type: "string", description: "项目根目录的绝对路径。" }
+      },
+      additionalProperties: false
+    }
+  },
+  {
     name: "probe_open_panel",
     title: "打开 align 探针面板",
     description:

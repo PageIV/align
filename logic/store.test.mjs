@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -70,8 +70,7 @@ test("同一次提交里的多条断言编号连续", async () => {
 
 test("配置里的上限被遵守", async () => {
   const root = await scratchDir();
-  await writeFile(join(root, "ALIGNMENT.md"), "", "utf8");
-  await import("node:fs/promises").then(({ mkdir }) => mkdir(join(root, ".align"), { recursive: true }));
+  await mkdir(join(root, ".align"), { recursive: true });
   await writeFile(join(root, ".align", "config.toml"), "hot_block_max_items = 1\n", "utf8");
 
   await commitItems(root, [{ statement: "甲。" }, { statement: "乙。" }], { date: DATE });
