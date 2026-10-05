@@ -1,8 +1,8 @@
 # align
 
-一个 Codex 插件：对 Agent 的回答在**隔离上下文**里追问，把确认下来的结论**落地**回主线程，让后面的对话不用重新对齐。
+一个 Codex 插件：对 Agent 的回答在**隔离上下文**里追问，把确认下来的**已确认项**落地，让后面的对话不用重新对齐。
 
-当前状态：**端到端最薄闭环**（工单 01–02）。设计已封板，见 [`.scratch/align/spec.md`](.scratch/align/spec.md)；工单与依赖图见 [`.scratch/align/issues/`](.scratch/align/issues/) 与 [`.scratch/align/graph.md`](.scratch/align/graph.md)；不占主线的细节记在 [`.scratch/align/memo.md`](.scratch/align/memo.md)。
+当前状态：**最薄闭环 + 类型策略 + 侧聊入口**（工单 01–03、07）。设计已封板，见 [`.scratch/align/spec.md`](.scratch/align/spec.md)；工单与依赖图见 [`.scratch/align/issues/`](.scratch/align/issues/) 与 [`.scratch/align/graph.md`](.scratch/align/graph.md)；不占主线的细节记在 [`.scratch/align/memo.md`](.scratch/align/memo.md)。
 
 ## 它做什么
 
@@ -11,6 +11,14 @@
 3. 落地分两条路：
    - **项目层**：写 `ALIGNMENT.md` 并更新 `AGENTS.md` 里的受管区块——每轮自动生效，活过新会话。
    - **线程层**：用 `ui/update-model-context` 附着到你下一条消息上，一次性，之后靠对话历史承重。
+
+## 怎么用
+
+1. 指着一条回答（选中文字，或说一句"关于上一条回答…"），让主 Agent 走 `align` 这个 skill。
+2. 追问在**侧聊**里做：输入框发 `/side`（快捷键 `Cmd+Shift+;`）开一个临时侧聊。它继承这条对话的历史但只当只读参考，而且**侧聊里说的话不会回到主线程**——这是它可以被信任的原因。
+3. 你说"这条算数"，回到主线程。主 Agent 把答案压成候选断言，调 `align_review` 打开面板，你在面板里勾选、选类型、落地。
+
+入口与纪律的全文在 [`skills/align/SKILL.md`](skills/align/SKILL.md)——那是主 Agent 读的那一份。
 
 ## 怎么打开面板
 
@@ -88,7 +96,8 @@ npm test
 ```
 .codex-plugin/plugin.json   插件清单
 .mcp.json                   MCP server 启动方式
-mcp/server.mjs              工具面：align_review / align_commit / probe_open_panel
+skills/align/SKILL.md       侧聊入口与纪律（主 Agent 读的那一份）
+mcp/server.mjs              工具面：align_review / align_commit / align_list / probe_open_panel
 ui/panel.html               正式面板
 ui/probe.html               探针面板
 logic/                      宿主无关的纯逻辑：账本、热块、存储、类型策略

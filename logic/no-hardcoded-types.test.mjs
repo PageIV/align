@@ -12,24 +12,37 @@ import { DEFAULT_TYPES } from "./config.mjs";
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULTS_FILE = join("logic", "config.mjs");
 
-async function sourceFiles() {
+// skills/ 也要扫：主 Agent 读的那份 SKILL.md 同样不该写死类型。
+const SCANNED_DIRS = ["logic", "mcp", "ui", "skills"];
+const SCANNED_EXTENSIONS = [".mjs", ".html", ".md"];
+
+async function sourceFiles(dir) {
   const files = [];
 
-  for (const dir of ["logic", "mcp", "ui"]) {
-    for (const name of await readdir(join(REPO, dir))) {
-      if (name.endsWith(".test.mjs")) continue;
-      if (!name.endsWith(".mjs") && !name.endsWith(".html")) continue;
-      files.push(join(dir, name));
+  for (const entry of await readdir(join(REPO, dir), { withFileTypes: true })) {
+    const file = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await sourceFiles(file)));
+      continue;
     }
+    if (entry.name.endsWith(".test.mjs")) continue;
+    if (!SCANNED_EXTENSIONS.some((extension) => entry.name.endsWith(extension))) continue;
+    files.push(file);
   }
 
+  return files;
+}
+
+async function allSourceFiles() {
+  const files = [];
+  for (const dir of SCANNED_DIRS) files.push(...(await sourceFiles(dir)));
   return files;
 }
 
 test("四个 slug 只出现在默认值表里", async () => {
   const offenders = [];
 
-  for (const file of await sourceFiles()) {
+  for (const file of await allSourceFiles()) {
     const source = await readFile(join(REPO, file), "utf8");
     for (const { slug } of DEFAULT_TYPES) {
       if (file !== DEFAULTS_FILE && source.includes(slug)) {

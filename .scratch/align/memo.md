@@ -14,12 +14,15 @@
 | # | 事项 | 位置 | 备注 |
 | --- | --- | --- | --- |
 | 1 | 面板不回传 `source` | `ui/panel.html`、`mcp/server.mjs` | `align_review` 已经把 `source` 递出来了，面板没读也没带，服务端永远回落成裸日期。背后有设计意图（事件溯源），只是不紧急 |
-| 2 | README 工具面漏 `align_list` | `README.md` 的目录图 | 服务器已经注册了它；和当初掩盖 `tools/list` 那个 bug 的漂移是同一类 |
-| 3 | 禁用词 | `README.md` 开头（结论）、`logic/store.test.mjs` 测试名（提交） | 以 `GLOSSARY.md` 第 3 行的适用范围为准 |
-| 4 | 协议兜底不是实测值 | `mcp/server.mjs` 的 `initialize` | 回落写的是 `2025-06-18`，实测值是 `2026-01-26` |
-| 5 | 上限默认值三处 | `logic/hot-block.mjs`、`logic/config.mjs`、`logic/store.mjs` | 各写了一份 `20`，改一处不会同步另两处 |
-| 6 | 硬编码 node 绝对路径 | `.mcp.json` | 未走评审，顺手记的：`/opt/homebrew/bin/node` 换路径就断 |
+| 2 | 禁用词 | `logic/store.test.mjs` 测试名（提交） | 以 `GLOSSARY.md` 第 3 行的适用范围为准 |
+| 3 | 协议兜底不是实测值 | `mcp/server.mjs` 的 `initialize` | 回落写的是 `2025-06-18`，实测值是 `2026-01-26` |
+| 4 | 上限默认值三处 | `logic/hot-block.mjs`、`logic/config.mjs`、`logic/store.mjs` | 各写了一份 `20`，改一处不会同步另两处 |
+| 5 | 硬编码 node 绝对路径 | `.mcp.json` | 未走评审，顺手记的：`/opt/homebrew/bin/node` 换路径就断 |
 
 ## 归到未来工单
 
 - **04**：`logic/item.mjs` 的 `status` 兼任状态与关系（`superseded by C-0NN` 只是个展示字符串），`isActive` 只认 `=== "active"`，supersede 链没有结构。
+
+## 已处理
+
+- README 目录图漏 `align_list`、README 开头的禁用词 —— 工单 07 顺手改掉了（2026-10-05）。
