@@ -18,4 +18,5 @@ Single-context: one `GLOSSARY.md` plus `docs/adr/` at the repo root. See `docs/a
 - [C-001] error-correction：宿主跑的是物化后的缓存副本，不是源码目录；版本号不变时重启不会重装。开发回路是：改码 → 提升 version → codex plugin add → 重启 app。
 - [C-002] concept-alignment：线程层落地是一次性附着：内容随下一条用户消息进入对话，之后靠对话历史承重，压缩即失效。唯一每轮自动生效的是项目层。
 - [C-003] concept-alignment：我认为 Codex 比 Claude Code 好用
+- [C-004] error-correction：侧聊可以调用工具；「不调工具」是 align 主动加的纪律，不是宿主的能力限制。
 <!-- align:end -->
