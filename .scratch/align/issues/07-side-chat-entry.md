@@ -1,6 +1,6 @@
 # 07 — 侧聊入口
 
-Status: resolved
+Status: 待真机复验
 Blocked by: 02
 Type: task
 
@@ -51,3 +51,5 @@ MCP server 的工作目录是**插件目录**，不是用户的项目。所以�
 
 - 2026-10-05 · 落地。清单加 skills、`SKILL.md` 进仓，加了两条守卫测试：清单声明的 skills 目录真的存在、每个 `SKILL.md` 的 frontmatter `name` 与目录名一致且有 description 与正文；"四个 slug 只出现在默认值表里"的扫描范围一并扩到 `skills/`。`npm test` 38/38。
 - 2026-10-05 · 验收标准 1–3 都是真机项，没跑。重启 app 后按 README 的"怎么用"走一遍即可；验证点分别落在"面板真的在主线程里打开""侧聊里说的随机标记主线程复述不出来""侧聊那一轮没调工具"。
+- 2026-10-05 · 独立复核：app 包里的侧聊字面量逐条对上（`Start a temporary side chat`、`sideConversationBoundaryItems`、`You are in a side conversation, not the main thread.`、`Sub-agents are off-limits in this side conversation.`）；`plugin:status` 自报 0.0.5，缓存副本里的 `SKILL.md` 与仓库逐字节一致。据此把状态从 `resolved` 改成 **待真机复验**——三项验收全是真机项，一次没跑。
+- 2026-10-05 · `SKILL.md` 里"宿主没有侧聊时"的退路原本推荐派 `fork_turns: "none"` 的子代理，实测不可靠（五次里四次收不到任务正文，且它照样能读文件、跑命令、看得见 `AGENTS.md`），已改成"退回主线程 + 守住纪律"。`GLOSSARY.md` 里侧聊定义中的 `/btw` 也一并换成宿主真实的 `/side`。

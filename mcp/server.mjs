@@ -237,7 +237,7 @@ async function handle(message) {
           tools: { listChanged: false },
           resources: { subscribe: false, listChanged: false }
         },
-        serverInfo: { name: "align", version: "0.0.5" }
+        serverInfo: { name: "align", version: "0.0.6" }
       });
       return;
 
