@@ -225,6 +225,13 @@
                 .map((item) => `${item.id} · ${item.type} · ${item.statement}`)
                 .join("\n")}`
             : "没有新增条目。";
+
+          // 落地后清空输入框：手写的那条已经收进去了。再落一次同一批内容是用户的
+          // 主观意愿，不拦——去重会让"确实想落两条一样的断言"变得做不到。
+          if (created.length > 0) {
+            draftEl.value = "";
+            updateLandState();
+          }
         });
 
         function withTimeout(promise, ms) {
