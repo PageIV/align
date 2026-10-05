@@ -91,13 +91,6 @@
 
     <script>
       (() => {
-        const TYPES = [
-          ["concept-alignment", "概念对齐"],
-          ["error-correction", "错误纠正"],
-          ["direction-correction", "方向纠偏"],
-          ["detail-completion", "细节填充"]
-        ];
-
         const statusEl = document.getElementById("status");
         const candidatesEl = document.getElementById("candidates");
         const draftEl = document.getElementById("draft");
@@ -107,7 +100,7 @@
         let nextId = 1;
         let hostReady = false;
         const pending = new Map();
-        const context = { root: null, candidates: [] };
+        const context = { root: null, candidates: [], types: [], suggested: null };
 
         function request(method, params) {
           const id = nextId++;
@@ -136,11 +129,12 @@
             statement.textContent = candidate.statement;
 
             const select = document.createElement("select");
-            for (const [slug, label] of TYPES) {
+            const chosen = candidate.type ?? context.suggested;
+            for (const { slug, label } of context.types) {
               const option = document.createElement("option");
               option.value = slug;
               option.textContent = label;
-              if ((candidate.type ?? TYPES[0][0]) === slug) option.selected = true;
+              if (chosen === slug) option.selected = true;
               select.append(option);
             }
 
@@ -167,11 +161,11 @@
             const select = row.querySelector("select");
             if (!box.checked) continue;
             const candidate = context.candidates[Number(box.dataset.index)];
-            items.push({ statement: candidate.statement, type: select.value });
+            items.push({ statement: candidate.statement, type: select.value || undefined });
           }
 
           const draft = draftEl.value.trim();
-          if (draft) items.push({ statement: draft, type: TYPES[0][0] });
+          if (draft) items.push({ statement: draft, type: context.suggested ?? undefined });
 
           return items;
         }
@@ -192,10 +186,41 @@
             if (!payload) return;
             context.root = payload.root ?? null;
             context.candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
+            context.types = Array.isArray(payload.types) ? payload.types : [];
+            context.suggested = payload.suggested ?? null;
             renderCandidates();
             updateLandState();
           }
         });
+
+        /**
+         * 需要复述的条目各发一条 ui/message 卡片：它立刻作为一条消息送达并触发模型一轮，
+         * 于是一次做两件事——触发复述，并把内容写进对话历史。
+         */
+        async function restateCards(created) {
+          const restating = created.filter((item) => item.restate === true);
+          if (restating.length === 0) return;
+
+          let sent = 0;
+          for (const item of restating) {
+            const label = context.types.find((type) => type.slug === item.type)?.label ?? item.type;
+            const response = await withTimeout(
+              request("ui/message", {
+                role: "user",
+                content: [
+                  {
+                    type: "text",
+                    text: `${item.statement}\n\n（align 把这条记为「${label}」${item.id}，需要你复述一遍。）`
+                  }
+                ]
+              }),
+              3000
+            );
+            if (!response?.error) sent += 1;
+          }
+
+          resultEl.textContent += `\n已发出 ${sent}/${restating.length} 条复述卡片。`;
+        }
 
         landEl.addEventListener("click", async () => {
           const items = collect();
@@ -231,6 +256,7 @@
           if (created.length > 0) {
             draftEl.value = "";
             updateLandState();
+            await restateCards(created);
           }
         });
 

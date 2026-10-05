@@ -2,8 +2,6 @@
 
 const ID_PATTERN = /^C-(\d+)$/;
 
-export const DEFAULT_TYPE = "concept-alignment";
-
 export function isActive(item) {
   return item.status === "active";
 }
@@ -23,10 +21,10 @@ export function nextId(items) {
   return `C-${String(max + 1).padStart(3, "0")}`;
 }
 
-export function createItem(draft, { id, date, source = "" }) {
+export function createItem(draft, { id, date, source = "", defaultType }) {
   return {
     id,
-    type: draft.type ?? DEFAULT_TYPE,
+    type: draft.type ?? defaultType,
     date,
     statement: oneLine(draft.statement),
     source,

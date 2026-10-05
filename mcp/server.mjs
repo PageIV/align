@@ -7,7 +7,8 @@
 import { readFile } from "node:fs/promises";
 import { createInterface } from "node:readline";
 
-import { commitItems, readItems } from "../logic/store.mjs";
+import { listTypes, suggestedType, typePolicy } from "../logic/config.mjs";
+import { commitItems, readConfig, readItems } from "../logic/store.mjs";
 
 const APP_MIME = "text/html;profile=mcp-app";
 
@@ -134,7 +135,10 @@ function assertDrafts(items) {
 async function callTool(name, params) {
   switch (name) {
     case "align_review": {
+      const root = resolveRoot(params);
       const candidates = Array.isArray(params?.candidates) ? params.candidates : [];
+      const config = await readConfig(root);
+
       return {
         content: [
           {
@@ -146,9 +150,11 @@ async function callTool(name, params) {
         ],
         structuredContent: {
           kind: "align-review",
-          root: resolveRoot(params),
+          root,
           source: params?.source ?? "",
-          candidates
+          candidates,
+          types: listTypes(config),
+          suggested: suggestedType(config)
         }
       };
     }
@@ -156,23 +162,33 @@ async function callTool(name, params) {
     case "align_commit": {
       assertDrafts(params?.items);
       const root = resolveRoot(params);
-      const { created } = await commitItems(root, params.items, {
+      const { created, config } = await commitItems(root, params.items, {
         date: localDate(),
         source: params?.source ?? localDate()
       });
 
-      const lines = created
+      // restate 由配置决定，不在这里判类型——类型是开放集合。
+      const landed = created.map((item) => ({
+        ...item,
+        restate: typePolicy(config, item.type).restate
+      }));
+
+      const lines = landed
         .map((item) => `${item.id} · ${item.type} · ${item.statement}`)
         .join("\n");
+      const restating = landed.filter((item) => item.restate);
+      const tail = restating.length
+        ? `需要复述的是：${restating.map((item) => item.id).join("、")}。`
+        : "这一批都不需要复述。";
 
       return {
         content: [
           {
             type: "text",
-            text: `已落地 ${created.length} 条到 ${root}：\n${lines}\n\n下面按类型策略决定要不要复述——错误纠正和方向纠偏需要复述，另外两类不用。`
+            text: `已落地 ${landed.length} 条到 ${root}：\n${lines}\n\n${tail}`
           }
         ],
-        structuredContent: { created }
+        structuredContent: { created: landed }
       };
     }
 
@@ -221,7 +237,7 @@ async function handle(message) {
           tools: { listChanged: false },
           resources: { subscribe: false, listChanged: false }
         },
-        serverInfo: { name: "align", version: "0.0.3" }
+        serverInfo: { name: "align", version: "0.0.4" }
       });
       return;
 

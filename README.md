@@ -18,6 +18,22 @@
 
 直接在浏览器里打开 `ui/panel.html` 是不行的：那里没有 MCP 宿主，`ui/initialize` 没人应答，`tools/call` 也没人转发，落地按钮点了不会有任何反应。面板现在会直说这件事，而不是让你对着一个死按钮猜。
 
+## 类型策略
+
+类型是开放集合：**增删类型只改项目根下的 `.align/config.toml`，不改代码，也不用重装**——服务器每次开面板时现读那份配置。
+
+```toml
+hot_block_max_items = 20
+
+[types.direction-correction]
+restate = true
+
+[types.foo]
+label = "新花样"
+```
+
+`restate = true` 的类型落地后，面板会替你发一条可见卡片，触发主 Agent 复述。没写 `restate` 的类型一律静默（新类型不该意外打断你）；`label` 只影响面板上的中文，省略时用 slug。默认的那几类见 `logic/config.mjs` 里的默认值表。
+
 ## 开发
 
 插件以本地 marketplace 的方式加载，`plugins/align` 是指向本仓库的符号链接：

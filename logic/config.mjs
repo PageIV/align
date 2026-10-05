@@ -1,9 +1,46 @@
 // .align/config.toml 的读取。
 //
-// 这里只认"顶层键 + [types.<slug>] 段"，够薄闭环用。完整的 TOML 解析留给工单 03，
-// 它会连同类型选择一起补齐。任何新类型没写 restate，一律按静默处理——默认值必须是安全的那个。
+// 类型是开放集合：增删类型只改配置，不改代码。所以下面这张默认值表是**唯一**允许出现
+// 类型 slug 的地方——logic/no-hardcoded-types.test.mjs 盯着这一条。
+//
+// 只认"顶层键 + [types.<slug>] 段"，够薄闭环用。任何没写 restate 的类型一律按静默处理，
+// 默认值必须是安全的那个。
+
+/** 出厂默认类型表。顺序就是面板里的展示顺序。 */
+export const DEFAULT_TYPES = [
+  { slug: "concept-alignment", label: "概念对齐", restate: false },
+  { slug: "error-correction", label: "错误纠正", restate: true },
+  { slug: "direction-correction", label: "方向纠偏", restate: true },
+  { slug: "detail-completion", label: "细节填充", restate: false }
+];
 
 export const DEFAULT_CONFIG = { hot_block_max_items: 20, types: {} };
+
+/** 每类条目落地后的行为。配置里没声明的类型一律静默。 */
+export function typePolicy(config, type) {
+  return { restate: config?.types?.[type]?.restate === true };
+}
+
+/** 面板要的类型列表。顺序稳定，标签回落成 slug。 */
+export function listTypes(config) {
+  return Object.entries(config?.types ?? {}).map(([slug, entry]) => ({
+    slug,
+    label: entry?.label ?? slug,
+    restate: entry?.restate === true
+  }));
+}
+
+/** 建议类型：列表里的第一个。 */
+export function suggestedType(config) {
+  return listTypes(config)[0]?.slug;
+}
+
+/** 出厂配置：默认类型先铺进 types，配置文件再往上盖。 */
+export function defaultConfig() {
+  const types = {};
+  for (const { slug, ...rest } of DEFAULT_TYPES) types[slug] = { ...rest };
+  return { hot_block_max_items: DEFAULT_CONFIG.hot_block_max_items, types };
+}
 
 function parseValue(raw) {
   const value = raw.replace(/\s+#.*$/, "").trim();
@@ -14,7 +51,7 @@ function parseValue(raw) {
 }
 
 export function parseConfig(text) {
-  const config = { hot_block_max_items: DEFAULT_CONFIG.hot_block_max_items, types: {} };
+  const config = defaultConfig();
   let section = null;
 
   for (const rawLine of String(text ?? "").split("\n")) {
@@ -45,10 +82,4 @@ export function parseConfig(text) {
   }
 
   return config;
-}
-
-/** 类型策略：声明缺失 = 静默。新类型永远不该意外打断用户。 */
-export function typePolicy(config, type) {
-  const declared = config?.types?.[type];
-  return { restate: declared?.restate === true };
 }

@@ -3,7 +3,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { DEFAULT_CONFIG, parseConfig } from "./config.mjs";
+import { DEFAULT_CONFIG, defaultConfig, parseConfig, suggestedType } from "./config.mjs";
 import { renderHotBlock, upsertHotBlock } from "./hot-block.mjs";
 import { createItem, nextId } from "./item.mjs";
 import { parseLedger, serializeLedger } from "./ledger.mjs";
@@ -23,7 +23,7 @@ async function readIfExists(file) {
 
 export async function readConfig(root) {
   const text = await readIfExists(join(root, CONFIG_PATH));
-  return text ? parseConfig(text) : { ...DEFAULT_CONFIG, types: {} };
+  return text ? parseConfig(text) : defaultConfig();
 }
 
 export async function readItems(root) {
@@ -38,12 +38,13 @@ export async function readItems(root) {
 export async function commitItems(root, drafts, { date, source = "" } = {}) {
   const config = await readConfig(root);
   const existing = await readItems(root);
+  const suggested = suggestedType(config);
 
   const created = [];
   let known = existing;
 
   for (const draft of drafts) {
-    const item = createItem(draft, { id: nextId(known), date, source });
+    const item = createItem(draft, { id: nextId(known), date, source, defaultType: suggested });
     created.push(item);
     known = [...known, item];
   }
@@ -60,5 +61,5 @@ export async function commitItems(root, drafts, { date, source = "" } = {}) {
     "utf8"
   );
 
-  return { created, items: known };
+  return { created, items: known, config };
 }

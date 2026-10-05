@@ -78,3 +78,18 @@ test("配置里的上限被遵守", async () => {
   const agents = await readFile(join(root, "AGENTS.md"), "utf8");
   assert.equal(agents.match(/^- \[C-/gm).length, 1);
 });
+
+test("落地时把配置一并带回来，类型按配置解析", async () => {
+  const root = await scratchDir();
+  await mkdir(join(root, ".align"), { recursive: true });
+  await writeFile(join(root, ".align", "config.toml"), '[types.foo]\nlabel = "新花样"\n', "utf8");
+
+  const { created, config } = await commitItems(
+    root,
+    [{ statement: "甲。", type: "foo" }, { statement: "乙。" }],
+    { date: DATE }
+  );
+
+  assert.deepEqual(created.map((item) => item.type), ["foo", "concept-alignment"]);
+  assert.match(JSON.stringify(config), /新花样/);
+});

@@ -20,7 +20,7 @@ test("断言被压成一行", () => {
 test("创建条目时补上默认类型和状态", () => {
   const item = createItem(
     { statement: "  某条断言  " },
-    { id: "C-001", date: "2026-10-04", source: "来源" }
+    { id: "C-001", date: "2026-10-04", source: "来源", defaultType: "concept-alignment" }
   );
   assert.deepEqual(item, {
     id: "C-001",
@@ -30,6 +30,14 @@ test("创建条目时补上默认类型和状态", () => {
     source: "来源",
     status: "active"
   });
+});
+
+test("草稿自带的类型优先于建议类型", () => {
+  const item = createItem(
+    { statement: "某条断言", type: "error-correction" },
+    { id: "C-001", date: "2026-10-04", defaultType: "concept-alignment" }
+  );
+  assert.equal(item.type, "error-correction");
 });
 
 test("supersede 只改旧条目的状态，不删历史", () => {
