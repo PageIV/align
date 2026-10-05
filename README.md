@@ -2,7 +2,7 @@
 
 一个 Codex 插件：对 Agent 的回答在**隔离上下文**里追问，把确认下来的结论**落地**回主线程，让后面的对话不用重新对齐。
 
-当前状态：**端到端最薄闭环**（工单 01–02）。设计已封板，见 [`.scratch/align/spec.md`](.scratch/align/spec.md)；工单与依赖图见 [`.scratch/align/issues/`](.scratch/align/issues/) 与 [`.scratch/align/graph.md`](.scratch/align/graph.md)。
+当前状态：**端到端最薄闭环**（工单 01–02）。设计已封板，见 [`.scratch/align/spec.md`](.scratch/align/spec.md)；工单与依赖图见 [`.scratch/align/issues/`](.scratch/align/issues/) 与 [`.scratch/align/graph.md`](.scratch/align/graph.md)；不占主线的细节记在 [`.scratch/align/memo.md`](.scratch/align/memo.md)。
 
 ## 它做什么
 
