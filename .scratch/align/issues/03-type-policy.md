@@ -1,6 +1,7 @@
 # 03 — 类型策略
 
-Status: open
+Status: resolved
+Resolved in: 8d0b1bd
 Blocked by: 02
 Type: task
 
@@ -31,3 +32,10 @@ Type: task
 - `.scratch/align/spec.md` 的"数据格式"（类型策略）与流程第 6 步
 - `GLOSSARY.md`：四种类型、类型策略
 
+## 实测（8d0b1bd）
+
+- **AC1**：临时项目里放 `[types.foo]`（不写 `restate`）→ `align_review` 返回的 `types` 里出现 `{slug: "foo", label: "新花样", restate: false}`，建议类型仍是列表第一个。没改任何代码。而且比验收标准更宽：**不用重启**，服务器每次开面板时现读配置。
+- **AC2**：把 `concept-alignment` 的 `restate` 改成 `true` → 同批落地后它带 `restate: true`，服务端文案「需要复述的是：C-002。」，同批的 `foo` 保持静默。
+- **AC3**：`logic/no-hardcoded-types.test.mjs` 盯着——四个 slug 只允许出现在 `logic/config.mjs` 的默认值表里。
+- `npm test` 36/36。
+- **未验**：面板发 `ui/message` 复述卡片那一段要真机点一次（重启 app 之后）。逻辑侧只保证 `restate` 传到了面板。

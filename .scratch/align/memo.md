@@ -22,5 +22,4 @@
 
 ## 归到未来工单
 
-- **03**：`align_commit` 的返回文案把四种类型写死（「错误纠正和方向纠偏需要复述，另外两类不用」），违反规格《风险》"类型策略是配置不是代码"；`logic/config.mjs` 的 `typePolicy()` 生产路径无人调用；面板的 `TYPES` 数组也硬编码了四个 slug。
 - **04**：`logic/item.mjs` 的 `status` 兼任状态与关系（`superseded by C-0NN` 只是个展示字符串），`isActive` 只认 `=== "active"`，supersede 链没有结构。
