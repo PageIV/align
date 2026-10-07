@@ -11,7 +11,7 @@
 import { appendFileSync, existsSync } from "node:fs";
 
 import { isActive } from "../logic/item.mjs";
-import { renderHotBlock } from "../logic/hot-block.mjs";
+import { renderHotBlock, selectHotBlock } from "../logic/hot-block.mjs";
 import {
   readConfig,
   readItems,
@@ -31,9 +31,13 @@ const HEADER = [
 
 // 复述是用户刚从侧聊带回来的一段，不是账本里的长期前提。它只出现这一次，
 // 效力按"用户当前这条消息"算——所以它比已确认前提更优先。
+//
+// 复述要**显眼**：它是一次性的，用户得能一眼看见"这段回来了"。所以标题加粗，
+// 条目用引用块，并且明说"在你的回复里也照样标出来"——不然它会淹在正文里。
 const RESTATEMENT_HEADER = [
-  "以下是用户刚从侧聊带回来的一次性复述（到达即消费，下一条提问不会再带上）。",
-  "它不进账本；效力等同于用户当前这条消息，优先于上面的已确认前提。"
+  "**以下是用户刚从侧聊带回来的一次性复述**（到达即消费，下一条提问不会再带上）。",
+  "它不进账本；效力等同于用户当前这条消息，优先于上面的已确认前提。",
+  "**这一轮回复里要把它原样说出来，并用加粗或引用标出来，让它一眼可见**——别改写、别总结。"
 ].join("\n");
 
 // 可选的投递追踪：这个标记文件存在时，每次触发都记一行 session / turn。
@@ -101,20 +105,28 @@ async function buildContext(rawInput) {
 
   const config = await readConfig(root).catch(() => null);
   const maxItems = Number(config?.hot_block_max_items);
-  const block = renderHotBlock(
-    items,
-    Number.isFinite(maxItems) && maxItems > 0 ? { maxItems } : {}
-  );
+  const options = Number.isFinite(maxItems) && maxItems > 0 ? { maxItems } : {};
+  const block = renderHotBlock(items, options);
+  const hot = selectHotBlock(items, options);
 
   // 这行 provenance 是给验证用的：AGENTS.md 的受注块里没有它，
   // 所以只要它在上下文里出现，就只可能来自钩子。
+  // `items` 是这一次真的进了热块的条数；上限把生效项挤出去时补一个 `dropped=`，
+  // 否则"有条目静默退出每轮注入"这件事从这行上看不出来。
   const stamp = new Date().toISOString();
-  const provenance = `<!-- align:inject at=${stamp} items=${active} restatements=${restatements.length} -->`;
+  const provenance = [
+    `<!-- align:inject at=${stamp}`,
+    `items=${hot.shown.length}`,
+    hot.dropped > 0 ? `dropped=${hot.dropped}` : "",
+    `restatements=${restatements.length} -->`
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   const parts = [HEADER, "", block];
 
   if (restatements.length > 0) {
-    parts.push("", RESTATEMENT_HEADER, "", ...restatements.map((entry) => `- ${entry.text}`));
+    parts.push("", RESTATEMENT_HEADER, "", ...restatements.map((entry) => `> ${entry.text}`));
   }
 
   parts.push("", provenance);

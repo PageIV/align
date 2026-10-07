@@ -32,7 +32,7 @@
 3. **确认**：你说"这条算数"→ 主 Agent 把结论压成候选断言，每条带一个建议目的地与一个标签。
 4. **选目的地**：`align_land` 弹出一张宿主原生表单，每条断言在「Align（落地）/ Restate（复述）/ Ignore（不落地）」里选一个，默认停在模型给的建议上。整张表单都不想决定时按自带的 skip。它不依赖 MCP App 面板，主线程和侧聊里都能弹。
 5. **落地**：插件写 `ALIGNMENT.md`。下一次提问时 `UserPromptSubmit` 钩子现读账本，把生效项注入那一轮。
-6. **复述**：选"复述"的那几条，在侧聊里落的进 `.align/inbox.md`，钩子在主线的下一次提问时带上一次就删；在主线程里落的当轮就由主 Agent 说出来，不进收件箱。它不需要那段内容够得上一条已确认项。
+6. **复述**：选"复述"的那几条，在侧聊里落的进 `.align/inbox.md`，钩子在主线的下一次提问时带上一次就删；在主线程里落的当轮就由主 Agent 说出来，不进收件箱。它不需要那段内容够得上一条已确认项。**复述要显眼**：注入时标题加粗、条目走引用块，模型在回复里也要用加粗或引用标出来——它只出现一次，得让人一眼看见。
 
 ## 载体
 
@@ -105,8 +105,10 @@ hooks/inject-hot-block.mjs     每轮注入：读账本 → 渲染热块 → 输
 skills/align/SKILL.md          入口与侧聊纪律
 mcp/server.mjs                 MCP server：align_land（落地，唯一入口）/ align_commit / align_list / probe_*
                                / align_open_ledger（开账本面板）/ align_edit（改标签 / 取代 / 退休）
+                               / align_take_open（面板专用：认领一次"展开侧栏"，取过即消费）
                                （旧的 align_review 已从工具面摘掉：落地统一走 align_land，见 C-007）
-ui/panel.html                  MCP App 面板：查看与编辑账本（不落地）
+ui/panel.html                  MCP App 面板：查看与编辑账本（不落地）。展开侧栏要认领
+                               （见工单 17）——挂载时抢 fullscreen 会把历史回放也一起抢
 logic/                         宿主无关的纯逻辑：存储、配置、账本序列化、热块、收件箱、目的地、supersede
 ```
 

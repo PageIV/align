@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { renderHotBlock, removeHotBlock } from "./hot-block.mjs";
+import { renderHotBlock, removeHotBlock, selectHotBlock } from "./hot-block.mjs";
 
 const ITEMS = [
   {
@@ -36,6 +36,35 @@ test("超过上限时截断，账本不受影响", () => {
   }));
   const block = renderHotBlock(many, { maxItems: 2 });
   assert.equal(block.match(/^- \[C-/gm).length, 2);
+});
+
+test("挑窗口：没到上限时一条不落", () => {
+  const { shown, total, dropped } = selectHotBlock(ITEMS, { maxItems: 20 });
+
+  assert.deepEqual(shown.map((item) => item.id), ["C-001"]);
+  assert.equal(total, 1, "失效的不算进上限");
+  assert.equal(dropped, 0);
+});
+
+test("挑窗口：超出上限的条数被数出来——它们是静默失效的那批", () => {
+  const many = Array.from({ length: 5 }, (_, index) => ({
+    ...ITEMS[0],
+    id: `C-10${index}`,
+    statement: `第 ${index} 条`
+  }));
+  const { shown, total, dropped } = selectHotBlock(many, { maxItems: 2 });
+
+  assert.equal(shown.length, 2);
+  assert.equal(total, 5);
+  assert.equal(dropped, 3);
+});
+
+test("挑窗口：上限读不成数字时全给，不静默丢条目", () => {
+  const many = Array.from({ length: 3 }, (_, index) => ({ ...ITEMS[0], id: `C-20${index}` }));
+  const { shown, dropped } = selectHotBlock(many, { maxItems: Number("不是数字") });
+
+  assert.equal(shown.length, 3);
+  assert.equal(dropped, 0);
 });
 
 const WITH_BLOCK = [

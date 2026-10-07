@@ -17,13 +17,16 @@ import {
 import {
   addRestatements,
   commitItems,
+  markPanelOpen,
   readConfig,
   readItems,
   readSessionMarker,
   retireItem,
+  takePanelOpen,
   reviseItem
 } from "../logic/store.mjs";
 import { isActive } from "../logic/item.mjs";
+import { DEFAULT_MAX_ITEMS, selectHotBlock } from "../logic/hot-block.mjs";
 
 const APP_MIME = "text/html;profile=mcp-app";
 
@@ -113,7 +116,8 @@ const TOOLS = [
   {
     name: "align_list",
     title: "看当前对齐了什么",
-    description: "读回账本，列出当前生效与已失效的已确认项。",
+    description:
+      "读回账本，列出当前生效与已失效的已确认项，并说明热块这次带了哪几条（上限之外的不再每轮注入）。只读，不开面板。",
     inputSchema: {
       type: "object",
       properties: {
@@ -135,6 +139,22 @@ const TOOLS = [
       additionalProperties: false
     },
     _meta: { ui: { resourceUri: PANEL_URI, visibility: ["model", "app"] } }
+  },
+  {
+    name: "align_take_open",
+    title: "取走这次展开侧栏的机会",
+    description:
+      "面板专用，模型不要调。面板挂载后用它问一句「这一次该由我把侧栏展开吗」——只有刚被 align_open_ledger 打开的那一次能取到 true，历史里重新挂载的面板取到 false，所以上滑聊天记录不会把侧栏抢走。取过即消费。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        root: { type: "string", description: "项目根目录的绝对路径。" }
+      },
+      required: ["root"],
+      additionalProperties: false
+    },
+    // 只给面板看：进不了模型的工具面，也就不会被误调。
+    _meta: { ui: { visibility: ["app"] } }
   },
   {
     name: "align_edit",
@@ -256,7 +276,31 @@ async function ledgerState(root) {
   const config = await readConfig(root);
   const items = await readItems(root);
   const active = items.filter(isActive).length;
-  return { root, items, types: listTypes(config), active, total: items.length };
+  // 热块的真实窗口：上限之外的那些仍在账本里、仍是 active，但不再每轮注入。
+  // 面板要把这件事说出来，不然一条已确认项会静默退出注入而谁也看不见。
+  const configured = Number(config?.hot_block_max_items);
+  const maxItems = Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_MAX_ITEMS;
+  const hot = selectHotBlock(items, { maxItems });
+
+  return {
+    root,
+    items,
+    types: listTypes(config),
+    active,
+    total: items.length,
+    hotBlock: { maxItems, shown: hot.shown.length, dropped: hot.dropped }
+  };
+}
+
+/** 账本的一句话摘要。上限把条目挤出热块时必须说出来，否则那是静默失效。 */
+function describeLedger(state) {
+  const parts = [`${state.active} 条生效、${state.total - state.active} 条已失效`];
+  if (state.hotBlock?.dropped > 0) {
+    parts.push(
+      `热块这次只带前 ${state.hotBlock.shown} 条，另外 ${state.hotBlock.dropped} 条超出上限（${state.hotBlock.maxItems}）——它们仍在账本里，但不再每轮注入`
+    );
+  }
+  return `${parts.join("；")}。`;
 }
 
 function describeEdit(result, types = []) {
@@ -298,32 +342,46 @@ async function callTool(name, params) {
     }
 
     case "align_list": {
-      const items = await readItems(resolveRoot(params));
-      return {
-        content: [
-          {
-            type: "text",
-            text: items.length
-              ? items
-                  .map((item) => `${item.id} · ${item.type} · ${item.status}：${item.statement}`)
-                  .join("\n")
-              : "账本还是空的。"
-          }
-        ],
-        structuredContent: { items }
-      };
-    }
-
-    case "align_open_ledger": {
       const state = await ledgerState(resolveRoot(params));
       return {
         content: [
           {
             type: "text",
-            text: `账本已打开：${state.active} 条生效、${state.total - state.active} 条已失效。面板里可以改标签、取代、退休；落地仍然走 align_land 的表单。`
+            text: state.items.length
+              ? `${describeLedger(state)}\n${state.items
+                  .map((item) => `${item.id} · ${item.type} · ${item.status}：${item.statement}`)
+                  .join("\n")}`
+              : "账本还是空的。"
           }
         ],
         structuredContent: state
+      };
+    }
+
+    case "align_open_ledger": {
+      const root = resolveRoot(params);
+      const state = await ledgerState(root);
+
+      // 放一个一次性的待取标记：面板挂载后会来取，取到才展开侧栏。
+      // 历史回放取不到——所以上滑聊天记录不会把侧栏一次次抢走。
+      await markPanelOpen(root).catch(() => {});
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `账本已打开：${describeLedger(state)}面板里可以改标签、取代、退休；落地仍然走 align_land 的表单。`
+          }
+        ],
+        structuredContent: state
+      };
+    }
+
+    case "align_take_open": {
+      const open = await takePanelOpen(resolveRoot(params));
+      return {
+        content: [{ type: "text", text: open ? "这次可以展开。" : "这次不展开。" }],
+        structuredContent: { open }
       };
     }
 
@@ -508,7 +566,7 @@ async function callTool(name, params) {
       sections.push(...linkLines({ replaced, warnings }));
       if (inline.length > 0) {
         sections.push(
-          `需要你**在这一轮回复里原样说出来**的复述（没写任何文件，别改写成结论）：\n${inline
+          `需要你**在这一轮回复里原样说出来**的复述（没写任何文件，别改写成结论）——说的时候用加粗或引用标出来，让它在一段叙述里一眼可见：\n${inline
             .map((text) => `- ${text}`)
             .join("\n")}`
         );
@@ -601,7 +659,7 @@ async function handle(message) {
           tools: { listChanged: false },
           resources: { subscribe: false, listChanged: false }
         },
-        serverInfo: { name: "align", version: "0.2.12" }
+        serverInfo: { name: "align", version: "0.2.13" }
       });
       return;
 

@@ -119,9 +119,12 @@ export async function takeRestatements(root, { session = "", isMain } = {}) {
 
 const SESSION_DIR = join("/tmp", `align-session-${typeof process.getuid === "function" ? process.getuid() : "u"}`);
 
+function sessionKey(root) {
+  return createHash("sha1").update(normalizeRoot(root)).digest("hex").slice(0, 16);
+}
+
 function sessionFile(root) {
-  const key = createHash("sha1").update(normalizeRoot(root)).digest("hex").slice(0, 16);
-  return join(SESSION_DIR, `${key}.json`);
+  return join(SESSION_DIR, `${sessionKey(root)}.json`);
 }
 
 export async function writeSessionMarker(root, payload) {
@@ -137,6 +140,42 @@ export async function readSessionMarker(root) {
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// 这一次该不该把侧栏抢过来
+// ---------------------------------------------------------------------------
+
+// 面板每次被**挂载**都会跑一遍它自己的脚本——包括你上滑聊天记录时，宿主把历史里的
+// MCP App 重新挂载起来。早先面板一挂载就无条件要求 fullscreen，于是每滑过一条历史
+// 账本，侧栏就被重新抢一次（2026-10-07 实测：连着打开两个）。
+//
+// 所以"要不要展开"改成一次性的：align_open_ledger 被调用时在这里放一个待取标记，
+// 面板挂载后调 align_take_open 来取。取过就没了——历史回放取不到，也就抢不走侧栏。
+// 带 TTL 是因为"放了标记但面板始终没挂载"（工具失败、宿主没渲染）时会留下一个陈标记，
+// 不能让它以后被误取。
+
+export const PANEL_OPEN_TTL_MS = 120_000;
+
+function panelOpenFile(root) {
+  return join(SESSION_DIR, `${sessionKey(root)}.open`);
+}
+
+/** 放一个"下一次面板挂载可以展开"的待取标记。 */
+export async function markPanelOpen(root, { at = Date.now() } = {}) {
+  await mkdir(SESSION_DIR, { recursive: true });
+  await writeFile(panelOpenFile(root), String(at), "utf8");
+}
+
+/** 取走这一次的展开机会。取过就消费掉——取不到、或者已经过期，都是 false。 */
+export async function takePanelOpen(root, { now = Date.now() } = {}) {
+  const file = panelOpenFile(root);
+  const text = await readIfExists(file);
+  await rm(file, { force: true });
+  if (!text) return false;
+
+  const at = Number(text);
+  return Number.isFinite(at) && now - at <= PANEL_OPEN_TTL_MS;
 }
 
 /**

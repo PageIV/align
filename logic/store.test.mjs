@@ -7,11 +7,14 @@ import test from "node:test";
 import {
   addRestatements,
   commitItems,
+  markPanelOpen,
+  PANEL_OPEN_TTL_MS,
   readInbox,
   readItems,
   readSessionMarker,
   retireItem,
   reviseItem,
+  takePanelOpen,
   takeRestatements,
   writeInbox,
   writeSessionMarker
@@ -370,4 +373,36 @@ test("取代过的条目不能再退休——已经失效了", async () => {
   assert.equal(result.ok, false);
   assert.match(result.reason, /不用再退休/);
   assert.equal(result.items.find((item) => item.id === "C-001").status, "superseded by C-002");
+});
+
+test("展开侧栏的机会只能取走一次——历史回放的面板取不到", async () => {
+  const root = await scratchDir();
+  await markPanelOpen(root);
+
+  assert.equal(await takePanelOpen(root), true);
+  assert.equal(await takePanelOpen(root), false, "取过就消费掉了");
+});
+
+test("没放过标记时取不到", async () => {
+  const root = await scratchDir();
+  assert.equal(await takePanelOpen(root), false);
+});
+
+test("陈标记会过期——放了标记但面板一直没挂载，不能以后被误取", async () => {
+  const root = await scratchDir();
+  const at = 1_700_000_000_000;
+  await markPanelOpen(root, { at });
+
+  assert.equal(await takePanelOpen(root, { now: at + PANEL_OPEN_TTL_MS }), true, "刚到期还算数");
+  await markPanelOpen(root, { at });
+  assert.equal(await takePanelOpen(root, { now: at + PANEL_OPEN_TTL_MS + 1 }), false);
+});
+
+test("两个项目各记各的展开标记", async () => {
+  const a = await scratchDir();
+  const b = await scratchDir();
+  await markPanelOpen(a);
+
+  assert.equal(await takePanelOpen(b), false);
+  assert.equal(await takePanelOpen(a), true);
 });

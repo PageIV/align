@@ -14,8 +14,23 @@ export const HOT_BLOCK_END = "<!-- align:end -->";
 // 曾经两处各写一份 20，改一处不会同步另一处。
 export const DEFAULT_MAX_ITEMS = 20;
 
-export function renderHotBlock(items, { maxItems = DEFAULT_MAX_ITEMS } = {}) {
-  const active = items.filter(isActive).slice(0, Math.max(0, maxItems));
+/**
+ * 挑出这一次真正要进热块的条目。
+ *
+ * 上限（`hot_block_max_items`）到了以后，最早的生效项仍在账本里，但不再每轮注入——
+ * 也就是"悄无声息地失效"。返回 total / dropped 就是为了让这件事能被看见：
+ * 钩子把它写进注入行，面板把它写在生效区标题旁边。
+ */
+export function selectHotBlock(items, { maxItems = DEFAULT_MAX_ITEMS } = {}) {
+  const active = items.filter(isActive);
+  const limit = Number(maxItems);
+  // 上限读不成数字时**全给**，不静默丢掉任何一条。
+  const shown = Number.isFinite(limit) && limit >= 0 ? active.slice(0, limit) : active;
+  return { shown, total: active.length, dropped: active.length - shown.length };
+}
+
+export function renderHotBlock(items, options = {}) {
+  const { shown: active } = selectHotBlock(items, options);
 
   const lines = [
     HOT_BLOCK_BEGIN,

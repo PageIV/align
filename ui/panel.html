@@ -155,7 +155,17 @@
       button.primary:hover:not(:disabled) { background: var(--accent-ring); }
       button.danger { border-color: var(--danger); color: var(--danger); }
       button.danger:hover:not(:disabled) { background: var(--accent-ring); }
-      #refresh { flex: none; opacity: 0.85; }
+      #expand, #refresh { flex: none; opacity: 0.85; }
+
+      .aside {
+        margin: 0 0 8px;
+        padding: 7px 9px;
+        border: 1px dashed var(--line-strong);
+        border-radius: 8px;
+        font-size: 11.5px;
+        line-height: 1.5;
+      }
+      .aside[hidden] { display: none; }
 
       .chips { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 7px; }
       .chip {
@@ -236,6 +246,7 @@
         </svg>
       </span>
       <h1>对齐账本</h1>
+      <button id="expand" hidden>在侧边打开</button>
       <button id="refresh" disabled>刷新</button>
     </header>
 
@@ -243,6 +254,7 @@
 
     <section>
       <h2>生效中 <span class="n" id="activeCount"></span></h2>
+      <p class="aside" id="dropped" hidden></p>
       <div id="active"></div>
     </section>
 
@@ -266,10 +278,16 @@
         const activeCountEl = document.getElementById("activeCount");
         const inactiveCountEl = document.getElementById("inactiveCount");
         const refreshEl = document.getElementById("refresh");
+        const expandEl = document.getElementById("expand");
+        const droppedEl = document.getElementById("dropped");
         const resultEl = document.getElementById("result");
 
         let nextId = 1;
         let hostReady = false;
+        // 面板只在"刚被 align_open_ledger 打开的那一次"里认领展开侧栏；
+        // 认领过的实例不再重复认领（历史回放也不会）。
+        let claimed = false;
+        let firstState = null;
         // 正在编辑的那条：{ id, statement, type }。null = 没有在编辑。
         let editing = null;
         let displayMode = "inline";
@@ -445,17 +463,73 @@
           }
         }
 
-        /** 面板要开在侧面、不要占着主线：握手之后立刻要求全屏（宿主里就是侧边面板）。 */
-        async function openInSidePanel() {
+        /** 侧栏只在两处开：刚打开那一次的认领，以及用户点「在侧边打开」。 */
+        async function requestDisplay(mode) {
           const response = await withTimeout(
-            request("ui/request-display-mode", { mode: "fullscreen" }),
+            request("ui/request-display-mode", { mode }),
             2000
           );
           displayMode = response?.result?.mode ?? displayMode;
-          if (displayMode !== "fullscreen") {
+          syncExpand();
+          if (mode === "fullscreen" && displayMode !== "fullscreen") {
             setNotice("宿主没有展开面板——用面板右上角的展开按钮。");
           }
-          render();
+          return displayMode;
+        }
+
+        /** 已经开在侧边了，就不必再摆一个"在侧边打开"。 */
+        function syncExpand() {
+          expandEl.hidden = displayMode === "fullscreen";
+        }
+
+        /**
+         * 这一次该不该把侧栏抢过来？
+         *
+         * 面板每次**挂载**都会跑一遍这段脚本——包括你上滑聊天记录、宿主把历史里的面板
+         * 重新挂载起来的时候。早先这里一挂载就无条件要求 fullscreen，于是每滑过一条历史
+         * 账本，侧栏就被重新抢一次（2026-10-07 实测：连着打开两个）。现在改成一次性认领：
+         * 只有刚被 align_open_ledger 打开的那一次取得到 true，历史回放取不到。
+         */
+        async function claimOpen() {
+          if (claimed || !state.root) return;
+          claimed = true;
+
+          // 用裸 request，不走 call()：历史回放里这次调用可能被宿主拒掉，
+          // 那不该在面板上留一条报错，让人以为面板坏了。
+          const response = await request("tools/call", {
+            name: "align_take_open",
+            arguments: { root: state.root }
+          });
+
+          if (response?.result?.structuredContent?.open === true) {
+            setNotice("");
+            await requestDisplay("fullscreen");
+          }
+        }
+
+        /** 等到第一次状态到达（历史回放常常不给状态）。 */
+        function waitForState(ms) {
+          if (state.root) return Promise.resolve(true);
+          return new Promise((resolve) => {
+            firstState = resolve;
+            setTimeout(() => {
+              if (firstState === resolve) {
+                firstState = null;
+                resolve(false);
+              }
+            }, ms);
+          });
+        }
+
+        /** 上限之外的生效项仍在账本里，但不再每轮注入——这件事要写在明面上。 */
+        function showHotBlockNote(hotBlock) {
+          if (!(hotBlock?.dropped > 0)) {
+            droppedEl.hidden = true;
+            droppedEl.textContent = "";
+            return;
+          }
+          droppedEl.textContent = `其中 ${hotBlock.dropped} 条超出热块上限（${hotBlock.maxItems}）——仍在账本里，但不再每轮注入。`;
+          droppedEl.hidden = false;
         }
 
         /** 工具回传的 structuredContent 就是完整账本，直接照着重渲染。 */
@@ -464,10 +538,18 @@
           if (payload.root) state.root = payload.root;
           if (Array.isArray(payload.items)) state.items = payload.items;
           if (Array.isArray(payload.types)) state.types = payload.types;
+          if (payload.hotBlock) showHotBlockNote(payload.hotBlock);
           editing = null;
           render();
+
           if (typeof payload.message === "string" && payload.message) {
             setResult(payload.message);
+          }
+
+          if (firstState && state.root) {
+            const arrived = firstState;
+            firstState = null;
+            arrived(true);
           }
         }
 
@@ -497,7 +579,11 @@
           await call("align_edit", { id: item.id, retire: true });
         }
 
-        refreshEl.addEventListener("click", () => call("align_open_ledger", {}));
+        // 刷新走 align_list（只读）而不是 align_open_ledger：后者会放一个新的"可展开"
+        // 待取标记，那等于每次点刷新都重新抢一次侧栏。
+        refreshEl.addEventListener("click", () => call("align_list", {}));
+
+        expandEl.addEventListener("click", () => requestDisplay("fullscreen"));
 
         window.addEventListener("message", (event) => {
           const data = event.data;
@@ -518,7 +604,10 @@
           // 宿主告诉我们展示方式变了（用户在 inline 与 fullscreen 之间切）。
           if (data.method === "ui/notifications/host-context-changed") {
             const next = data.params?.displayMode;
-            if (typeof next === "string") displayMode = next;
+            if (typeof next === "string") {
+              displayMode = next;
+              syncExpand();
+            }
           }
         });
 
@@ -545,7 +634,7 @@
 
           const response = await withTimeout(
             request("ui/initialize", {
-              appInfo: { name: "align-panel", version: "0.2.12" },
+              appInfo: { name: "align-panel", version: "0.2.13" },
               appCapabilities: {},
               protocolVersion: "2025-11-21"
             }),
@@ -561,8 +650,12 @@
           notify("ui/notifications/initialized", {});
           refreshEl.disabled = false;
           setNotice("");
+          syncExpand();
           render();
-          await openInSidePanel();
+
+          // 等第一次状态到达。没等到就不认领——连项目根都不知道，不能去抢侧栏。
+          const arrived = await waitForState(1500);
+          if (arrived) await claimOpen();
         })();
       })();
     </script>
