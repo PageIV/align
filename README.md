@@ -156,6 +156,24 @@ enabled = true
 npm test
 ```
 
+## 分享给别人
+
+这个仓库**本身就是一个 marketplace**——`.agents/plugins/marketplace.json` 里写的是 `path: "."`，插件就在仓库根上。所以别人拿到仓库地址，两条命令就装好了：
+
+```sh
+codex plugin marketplace add <owner/repo>   # 也吃 git HTTPS / SSH 地址，或者一个本地路径
+codex plugin add align@align
+```
+
+装完**必须再做两步**，少一步看起来都像"插件没生效"：
+
+1. **重启 app**——钩子与 MCP server 都是启动时加载的。
+2. **设置 → Hooks 里过一遍信任。** 没信任的钩子宿主**静默不跑**：不报错，也没有"已跳过"的提示。
+
+**对方不需要自己装 node。** 两个入口都走 `scripts/run-node.sh`：先找对方自己的 node（Homebrew / nvm / Volta / asdf / PATH），都找不到就退回**应用自带**的那个——我在这份构建里量到的是 `/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node`，v24.21.0，跑这个插件绰绰有余。真一个都找不到时，它会往 `/tmp/align-node.log` 留一行说明找过哪儿；插件"没反应"时先看那个文件。
+
+一句提醒：下面"开发"一节里的 `align-dev` marketplace 指向**本机仓库路径**，只在这台机器上成立；分享用的那套不依赖它。
+
 ## 探针
 
 只剩一个：**`probe_elicit`**。由插件 server 向宿主发一张 elicitation 表单（勾选框 + 多选 + 单选 + 文本框），看宿主渲不渲染、在**侧聊**里渲不渲染、回传的形状对不对，顺带带出宿主在 `initialize` 里自报的 client capabilities。不写任何文件。app 升级之后用它复测"落地表单这条路还在不在"。

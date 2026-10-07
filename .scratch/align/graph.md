@@ -26,6 +26,7 @@ flowchart TD
   t18["18 表单主次与可编辑内容"]
   t19["19 退休要确认"]
   t20["20 node 启动壳"]
+  t21["21 仓库即 marketplace"]
 
   t01 --> t02
   t02 --> t03
@@ -74,6 +75,7 @@ flowchart TD
 | 18 | 表单形态 | 14 | **已实现（0.2.17），待真机复验**：向导一问一页，所以一条候选一个问题（那句话就是问题文字）；顶部不摆图例、只留一行标题；选项文字自带解释（宿主的选择项只有 `const`/`title`，放不下 hover 说明）。详情见 ADR-0003 |
 | 19 | 退休要确认 | 08 | **已实现（0.2.18），待真机复验**：点「退休」先进确认态（面板自己的两步确认，不用 `window.confirm()`——沙箱 iframe 里可能被挡）；确认之后才调 `align_edit` |
 | 20 | node 启动壳 | — | **已实现（0.2.19），待真机复验**：两个入口不再写死 `/opt/homebrew/bin/node`，改走 `scripts/run-node.sh`（按序找 node，找不到就写 `/tmp/align-node.log` 并退出码 0） |
+| 21 | 仓库即 marketplace | — | **已 resolved（0.2.20）**：仓库根加 `.agents/plugins/marketplace.json`（`path: "."`），别人 `marketplace add` + `plugin add align@align` 两条命令装好；本机拿 /tmp 副本验过 CLI 这一层 |
 
 ## 前沿
 
