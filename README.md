@@ -156,23 +156,50 @@ enabled = true
 npm test
 ```
 
-## 分享给别人
+### 推到远端（GitHub 私有）
 
-这个仓库**本身就是一个 marketplace**——`.agents/plugins/marketplace.json` 里写的是 `path: "."`，插件就在仓库根上。所以别人拿到仓库地址，两条命令就装好了：
+仓库目前**没有远端**（`git remote -v` 是空的），分支叫 `master`。
+
+1. 先在 GitHub 网页上建一个 **Private** 仓库（名字随便，比如 `align`）。**不要**勾 README / .gitignore / license——勾了会多出一个远程提交，第一次推还得先合。
+2. 然后：
 
 ```sh
-codex plugin marketplace add <owner/repo>   # 也吃 git HTTPS / SSH 地址，或者一个本地路径
+cd /Users/page/Documents/Work/pugins
+git status                 # 确认工作区干净：没提交的东西不会跟着走
+git branch -M main         # 可选。GitHub 那边的习惯是 main；不改就推 master，一样能用
+git remote add origin git@github.com:<你的账号>/<仓库名>.git
+git push -u origin main    # 用 HTTPS 就把地址换成 https://github.com/<你的账号>/<仓库名>.git
+```
+
+之后每次发新版就三步：改代码 → 提版本 → `git push`。远端有了新版本，别人那边 `codex plugin marketplace upgrade` 再 `plugin add` 就能拿到（见下一节）。
+
+（这台机器上没装 `gh`。装了的话，第 1 步可以省掉：`gh repo create <仓库名> --private --source=. --remote=origin --push`。）
+
+## 分享给别人
+
+这个仓库**本身就是一个 marketplace**——`.agents/plugins/marketplace.json` 里写的是 `path: "."`，插件就在仓库根上。所以别人拿到仓库地址，两条命令装好：
+
+```sh
+codex plugin marketplace add <owner/repo>   # 也吃完整 git 地址，或者一个本地路径
 codex plugin add align@align
 ```
 
-装完**必须再做两步**，少一步看起来都像"插件没生效"：
+然后还有两步，**少一步都像"插件没生效"**：
 
 1. **重启 app**——钩子与 MCP server 都是启动时加载的。
 2. **设置 → Hooks 里过一遍信任。** 没信任的钩子宿主**静默不跑**：不报错，也没有"已跳过"的提示。
 
-**对方不需要自己装 node。** 两个入口都走 `scripts/run-node.sh`：先找对方自己的 node（Homebrew / nvm / Volta / asdf / PATH），都找不到就退回**应用自带**的那个——我在这份构建里量到的是 `/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node`，v24.21.0，跑这个插件绰绰有余。真一个都找不到时，它会往 `/tmp/align-node.log` 留一行说明找过哪儿；插件"没反应"时先看那个文件。
+更新也一样：`codex plugin marketplace upgrade` → `codex plugin add align@align` → **重启 + 再过一次信任**（版本变了，钩子得重新信任）。
 
-一句提醒：下面"开发"一节里的 `align-dev` marketplace 指向**本机仓库路径**，只在这台机器上成立；分享用的那套不依赖它。
+### 对方需要什么
+
+- **装了 Codex 桌面版**（要有插件、钩子、MCP Apps 这几样能力）。
+- **私有仓库的话**：他得在协作者名单里，而且他本机的 git 凭据（SSH key 或 HTTPS token）能用——`marketplace add` 是让他本机的 git 去拉。
+- **不需要自己装 node。** 两个入口都走 `scripts/run-node.sh`：先找他自己的 node（Homebrew / nvm / Volta / asdf / PATH），都找不到就退回**应用自带**的那个（这份构建里量到 `/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node`，v24.21.0）。真一个都找不到时，它会往 `/tmp/align-node.log` 留一行说明找过哪儿——插件"没反应"时先看那个文件。
+
+### 发布前值得知道的一件事
+
+`plugin add` 会把**整个仓库**物化到对方的插件缓存里（`~/.codex/plugins/cache/<marketplace>/align/<版本>/`）。也就是说 `.scratch/`（工单、交接）、`docs/discussion.md`、`ALIGNMENT.md` 这些过程记录对方也会有一份。它们不参与运行——只给运行必需的东西的话，发布前把这几样从仓库里拿掉即可。
 
 ## 探针
 
