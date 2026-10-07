@@ -36,6 +36,8 @@ export function buildLandingForm(candidates, config) {
     const key = `c${index + 1}`;
     const suggestion = suggestionSlug(candidate?.destination);
     const type = resolveType(config, candidate?.type ?? fallbackType);
+    // 只有一条候选时"第 1 条"是废话——它就在唯一那一页上。
+    const prefix = candidates.length > 1 ? `第 ${index + 1} 条 · ` : "";
     // 建议的那一项排最前面：宿主若不认 default，枚举的第一项就是落点，效果一样。
     const order = [
       suggestion,
@@ -46,7 +48,7 @@ export function buildLandingForm(candidates, config) {
       type: "string",
       // 那句话就是这一页的问题：用户在同一页上既能读到它，也能选它去哪。
       title: String(candidate?.statement ?? ""),
-      description: `第 ${index + 1} 条 · 建议 ${destinationLabel(suggestion)} · 标签 ${typeLabel(types, type)}`,
+      description: `${prefix}建议 ${destinationLabel(suggestion)} · 标签 ${typeLabel(types, type)}`,
       enum: order.map((slug) => destinationLabel(slug)),
       enumNames: order.map((slug) => destinationChoice(slug)),
       default: destinationLabel(suggestion)
@@ -55,7 +57,16 @@ export function buildLandingForm(candidates, config) {
     slots.push({ key, candidate, suggestion, type });
   });
 
-  // 表单顶部**不写字**：向导会把它钉在每一页上头，而它要说的事（建议、Skip）在别处都有。
-  // message 是必填字段，所以给空串，不是省略。
-  return { message: "", properties, slots };
+  // 表单顶部**只留一行标题**，不是说明书：
+  //
+  // - 那段"每条的描述里写着它自己的建议……"是废话——建议就在每条的描述里；"共 N 条"
+  //   也多余，向导自己写着 `{current} of {total}`。2026-10-07 用户点名要去掉。
+  // - 但顶部**不能是空的**：这一段就是表单那张卡的头部，清空之后问题文字直接贴到框顶，
+  //   一条候选时尤其明显（"文字太靠上"）。标题只干一件事——把内容压下去一格、给卡片
+  //   一个头。
+  //
+  // message 是必填字段（宿主 schema 里没有 optional），所以永远给一个非空值。
+  const message = candidates.length === 1 ? "这条去哪？" : "逐条选去哪";
+
+  return { message, properties, slots };
 }
