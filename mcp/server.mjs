@@ -55,8 +55,7 @@ const STATEMENT_SCHEMA = {
   properties: {
     statement: {
       type: "string",
-      description:
-        "一句话断言。它会预填进表单上那个可编辑的「内容」框——用户改了就按他改的写。选「复述」时，这段文本就是被带回主线的那段，尽量照抄原话。"
+      description: "一句话断言。选「复述」时，这段文本就是被带回主线的那段，尽量照抄原话。"
     },
     type: {
       type: "string",
@@ -112,7 +111,7 @@ const TOOLS = [
     name: "align_land",
     title: "落地（原生表单）",
     description:
-      "把候选断言交给用户，用宿主原生的 elicitation 表单逐条选去哪：「Align」写进 ALIGNMENT.md 以后每轮带上、「Restate」只带回主线说一次、「Ignore」不留痕。每条候选在表单上是两个字段——一个可编辑的「内容」框（预填你写的 statement，用户改了就按他改的写），一个「去哪」的选择。表单默认停在你在每条候选上给的 destination 建议上；用户整张表单都不想决定时按 skip，账本不动。主线程和侧聊都能用——在侧聊里用它，就是把结论搬回主线的正路。root 省略时用插件进程的工作目录，主 Agent 应当把当前工作区的绝对路径传进来。",
+      "把候选断言交给用户，用宿主原生的 elicitation 表单逐条选去哪：「Align」写进 ALIGNMENT.md 以后每轮带上、「Restate」只带回主线说一次、「Ignore」不留痕。表单是**一问一页**的向导，每条候选就是那一页的问题（问题文字就是你写的 statement），下面三个选项。表单默认停在你在每条候选上给的 destination 建议上；用户整张表单都不想决定时按 skip，账本不动。主线程和侧聊都能用——在侧聊里用它，就是把结论搬回主线的正路。root 省略时用插件进程的工作目录，主 Agent 应当把当前工作区的绝对路径传进来。",
     inputSchema: {
       type: "object",
       properties: {
@@ -478,26 +477,21 @@ async function callTool(name, params) {
       const chosen = [];
       const restatements = [];
 
-      for (const { choiceKey, textKey, candidate, suggestion, type } of slots) {
+      for (const { key, candidate, suggestion, type } of slots) {
         // 空值按建议处理。宿主不预选选择型字段（见上面的说明），所以"没动过"在回传里就是
-        // 缺这个 key——表单顶部那句"没动过的那条按它的建议处理"把这件事讲明白了，
-        // 用户不改就是同意模型的建议。
-        const raw = content[choiceKey];
+        // 缺这个 key——用户不改就是同意模型的建议。
+        const raw = content[key];
         const picked = typeof raw === "string" && raw.trim() ? raw.trim() : destinationLabel(suggestion);
         const destination = destinationSlug(picked);
 
-        // 内容框是预填的：用户没动就是原句，动过就用他改的那句。落地与复述都用它。
-        const edited = content[textKey];
-        const statement = typeof edited === "string" && edited.trim() ? edited.trim() : candidate.statement;
-
         if (destination === "land") {
           chosen.push({
-            statement,
+            statement: candidate.statement,
             type,
             supersedes: typeof candidate.supersedes === "string" ? candidate.supersedes.trim() : ""
           });
         }
-        else if (destination === "restate") restatements.push(statement);
+        else if (destination === "restate") restatements.push(candidate.statement);
       }
 
       if (chosen.length === 0 && restatements.length === 0) {
@@ -646,7 +640,7 @@ async function handle(message) {
           tools: { listChanged: false },
           resources: { subscribe: false, listChanged: false }
         },
-        serverInfo: { name: "align", version: "0.2.15" }
+        serverInfo: { name: "align", version: "0.2.16" }
       });
       return;
 

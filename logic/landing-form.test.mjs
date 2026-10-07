@@ -10,24 +10,17 @@ function form(candidates) {
   return buildLandingForm(candidates, CONFIG);
 }
 
-test("一条候选两个字段：内容框在前，去哪在后", () => {
+test("一条候选一个字段——向导一问一页，两个字段就是两页", () => {
   const { properties, slots } = form([{ statement: "甲。", destination: "land" }]);
 
-  assert.deepEqual(Object.keys(properties), ["t1", "c1"]);
-  assert.deepEqual(
-    slots.map((slot) => [slot.textKey, slot.choiceKey]),
-    [["t1", "c1"]]
-  );
+  assert.deepEqual(Object.keys(properties), ["c1"]);
+  assert.deepEqual(slots.map((slot) => slot.key), ["c1"]);
 });
 
-test("内容框预填那句话，而且是可改的文本字段", () => {
+test("那句话就是那一页的问题文字——它得和选项在同一页上", () => {
   const { properties } = form([{ statement: "先别重构。" }]);
 
-  assert.equal(properties.t1.type, "string");
-  assert.equal(properties.t1.default, "先别重构。");
-  // 选择型字段不许预选（宿主跳过硬编码），文本字段可以——"要复述的内容放进可编辑框"
-  // 能成立，靠的就是这一条差别。
-  assert.equal(properties.t1.enum, undefined);
+  assert.equal(properties.c1.title, "先别重构。");
 });
 
 test("选项文字各自带解释，且与 enum 逐项对齐", () => {
@@ -44,12 +37,10 @@ test("选项文字各自带解释，且与 enum 逐项对齐", () => {
   });
 });
 
-test("表单顶部不再摆图例", () => {
+test("表单顶部一个字都不写：向导会把它钉在每一页上", () => {
   const { message } = form([{ statement: "甲。" }]);
 
-  assert.doesNotMatch(message, /Align\s*=/);
-  assert.doesNotMatch(message, /Restate\s*=/);
-  assert.equal(message.split("\n").length, 2);
+  assert.equal(message, "");
 });
 
 test("建议写在条目自己的描述里", () => {
@@ -61,11 +52,11 @@ test("建议写在条目自己的描述里", () => {
   assert.match(properties.c1.description, /标签 错误纠正/);
 });
 
-test("多条候选各占两个字段，编号跟着走", () => {
+test("多条候选各占一个字段，编号跟着走", () => {
   const { properties } = form([{ statement: "甲。" }, { statement: "乙。" }]);
 
-  assert.deepEqual(Object.keys(properties), ["t1", "c1", "t2", "c2"]);
-  assert.equal(properties.t2.default, "乙。");
+  assert.deepEqual(Object.keys(properties), ["c1", "c2"]);
+  assert.equal(properties.c2.title, "乙。");
 });
 
 test("没给建议时落到不落地，选项顺序跟着变", () => {
