@@ -64,6 +64,14 @@
         opacity: 0.9;
       }
       h2 .n:empty { display: none; }
+      .counts {
+        font-size: 11px;
+        opacity: 0.7;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .counts[hidden] { display: none; }
+      #full[hidden] { display: none; }
 
       .notice {
         margin: 12px 0 0;
@@ -246,28 +254,34 @@
         </svg>
       </span>
       <h1>对齐账本</h1>
+      <span class="counts" id="counts" hidden></span>
       <button id="expand" hidden>在侧边打开</button>
       <button id="refresh" disabled>刷新</button>
     </header>
 
     <p class="notice" id="notice">正在与宿主握手…</p>
 
-    <section>
-      <h2>生效中 <span class="n" id="activeCount"></span></h2>
-      <p class="aside" id="dropped" hidden></p>
-      <div id="active"></div>
-    </section>
+    <!-- 整份账本只在展开时渲染。主线里留下的那一份必须**小巧**：
+         历史消息会被宿主重新挂载，如果这里还是整份账本，上滑翻记录时主线里就会
+         一次次铺开一大块（2026-10-07 用户报的第二个现象）。 -->
+    <div id="full">
+      <section>
+        <h2>生效中 <span class="n" id="activeCount"></span></h2>
+        <p class="aside" id="dropped" hidden></p>
+        <div id="active"></div>
+      </section>
 
-    <section id="inactiveSection" hidden>
-      <h2>已失效 <span class="n" id="inactiveCount"></span></h2>
-      <div id="inactive"></div>
-    </section>
+      <section id="inactiveSection" hidden>
+        <h2>已失效 <span class="n" id="inactiveCount"></span></h2>
+        <div id="inactive"></div>
+      </section>
 
-    <div class="result" id="result"></div>
+      <div class="result" id="result"></div>
 
-    <p class="hint">
-      这里改的是<strong>已经落下的</strong>条目。新条目走对话里的原生表单（<code>align_land</code>），不从这个面板落地。
-    </p>
+      <p class="hint">
+        这里改的是<strong>已经落下的</strong>条目。新条目走对话里的原生表单（<code>align_land</code>），不从这个面板落地。
+      </p>
+    </div>
 
     <script>
       (() => {
@@ -280,6 +294,8 @@
         const refreshEl = document.getElementById("refresh");
         const expandEl = document.getElementById("expand");
         const droppedEl = document.getElementById("dropped");
+        const countsEl = document.getElementById("counts");
+        const fullEl = document.getElementById("full");
         const resultEl = document.getElementById("result");
 
         let nextId = 1;
@@ -461,6 +477,7 @@
             activeCountEl.textContent = String(active.length);
             inactiveCountEl.textContent = inactive.length === 0 ? "" : String(inactive.length);
           }
+          renderCounts();
         }
 
         /** 侧栏只在两处开：刚打开那一次的认领，以及用户点「在侧边打开」。 */
@@ -470,16 +487,35 @@
             2000
           );
           displayMode = response?.result?.mode ?? displayMode;
-          syncExpand();
+          syncMode();
           if (mode === "fullscreen" && displayMode !== "fullscreen") {
             setNotice("宿主没有展开面板——用面板右上角的展开按钮。");
           }
           return displayMode;
         }
 
-        /** 已经开在侧边了，就不必再摆一个"在侧边打开"。 */
-        function syncExpand() {
-          expandEl.hidden = displayMode === "fullscreen";
+        /**
+         * 两种形态：展开时是整份账本，收起时只剩一张入口卡片。
+         *
+         * 收起态**必须小巧**。主线里留下的那份会被宿主重新挂载，整份账本摊在对话里，
+         * 上滑翻记录就变成一路铺开（2026-10-07 用户报的第二个现象）。
+         */
+        function syncMode() {
+          const compact = displayMode !== "fullscreen";
+          fullEl.hidden = compact;
+          countsEl.hidden = !compact;
+          expandEl.hidden = !compact;
+          refreshEl.hidden = compact;
+          renderCounts();
+        }
+
+        /** 收起态那一行：几张生效、几张已失效。 */
+        function renderCounts() {
+          if (!hostReady || countsEl.hidden) return;
+          const active = state.items.filter(isActive).length;
+          const inactive = state.items.length - active;
+          countsEl.textContent =
+            inactive > 0 ? `${active} 条生效 · ${inactive} 条已失效` : `${active} 条生效`;
         }
 
         /**
@@ -606,7 +642,7 @@
             const next = data.params?.displayMode;
             if (typeof next === "string") {
               displayMode = next;
-              syncExpand();
+              syncMode();
             }
           }
         });
@@ -634,7 +670,7 @@
 
           const response = await withTimeout(
             request("ui/initialize", {
-              appInfo: { name: "align-panel", version: "0.2.13" },
+              appInfo: { name: "align-panel", version: "0.2.14" },
               appCapabilities: {},
               protocolVersion: "2025-11-21"
             }),
@@ -650,7 +686,7 @@
           notify("ui/notifications/initialized", {});
           refreshEl.disabled = false;
           setNotice("");
-          syncExpand();
+          syncMode();
           render();
 
           // 等第一次状态到达。没等到就不认领——连项目根都不知道，不能去抢侧栏。

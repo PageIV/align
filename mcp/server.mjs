@@ -32,6 +32,20 @@ const APP_MIME = "text/html;profile=mcp-app";
 
 const PANEL_URI = "ui://align/panel.html";
 
+// 落地之后怎么回报用户：**只说结果，一句话**。
+//
+// 这条不是多余的说教。2026-10-07 实测：模型会照着工具结果的形状回报用户——
+// "复述已经落进收件箱了（`.align/inbox.md`，写入者是这个侧聊的 session 01a11429…），
+// 没有写进账本……没有 inline，只有 inboxed 一条"。文件名、session id、字段名全是
+// 内部细节，用户要的只是"去哪了"。
+const REPLY_RULE = [
+  "**怎么回报用户：一句话说结果就够。**",
+  "- 写进账本的 →「已落地 C-019」（有编号就带上），可以补半句「从下一轮起每轮带上」。",
+  "- 复述的 →「已复述，会在你下次提问时到达，只带一次。」",
+  "- 要你当轮说的那一段 → 原样说出来，加粗或引用；这一条不能只报「已复述」。",
+  "- **不许提**文件名、路径、session id、工具名、字段名（inline / inboxed 这类），也别把这份结果的结构复述一遍。"
+].join("\n");
+
 const RESOURCES = new Map([
   [PANEL_URI, { file: new URL("../ui/panel.html", import.meta.url), name: "align panel" }]
 ]);
@@ -558,7 +572,7 @@ async function callTool(name, params) {
       const sections = [];
       if (created.length > 0) {
         sections.push(
-          `已落地 ${created.length} 条到 ${root}：\n${created
+          `已落地 ${created.length} 条：\n${created
             .map((item) => `${item.id} · ${item.type} · ${item.statement}`)
             .join("\n")}`
         );
@@ -578,6 +592,10 @@ async function callTool(name, params) {
             .join("\n")}`
         );
       }
+      if (created.length === 0 && inline.length === 0 && inboxed.length === 0) {
+        sections.push("用户逐条选了不落地（Ignore）——这次没有写任何文件。");
+      }
+      sections.push(REPLY_RULE);
 
       return {
         content: [{ type: "text", text: sections.join("\n\n") }],
@@ -659,7 +677,7 @@ async function handle(message) {
           tools: { listChanged: false },
           resources: { subscribe: false, listChanged: false }
         },
-        serverInfo: { name: "align", version: "0.2.13" }
+        serverInfo: { name: "align", version: "0.2.14" }
       });
       return;
 
