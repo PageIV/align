@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   DEFAULT_DESTINATION,
   DESTINATIONS,
+  destinationChoice,
   destinationLabel,
   destinationSlug,
   suggestionSlug
@@ -51,4 +52,15 @@ test("每个目的地都带一句说明，表单要拿它解释选项", () => {
     assert.equal(typeof hint, "string");
     assert.ok(hint.length > 0);
   }
+});
+
+test("选项文字是「标签 · 一句解释」", () => {
+  assert.equal(destinationChoice("restate"), "Restate · 只带回主线说一次");
+  assert.equal(destinationChoice("land"), "Align · 写进账本，以后每轮带上");
+});
+
+test("回传的是带解释的整句也认——认不出来会静默落成 Ignore，代价太大", () => {
+  assert.equal(destinationSlug("Restate · 只带回主线说一次"), "restate");
+  assert.equal(destinationSlug("Align · 写进账本，以后每轮带上"), "land");
+  assert.equal(destinationSlug("Ignore · 不留痕"), "ignore");
 });

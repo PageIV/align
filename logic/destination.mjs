@@ -12,9 +12,9 @@
 // 类型不在其中：类型退化成标签（工单 15），由模型在背后给出，不再让用户选。
 
 export const DESTINATIONS = [
-  { slug: "land", label: "Align", hint: "写进 ALIGNMENT.md，之后每轮都带上。" },
-  { slug: "restate", label: "Restate", hint: "只把这段带回主线说一次，不进账本。" },
-  { slug: "ignore", label: "Ignore", hint: "不留痕，这条不写任何文件。" }
+  { slug: "land", label: "Align", hint: "写进账本，以后每轮带上" },
+  { slug: "restate", label: "Restate", hint: "只带回主线说一次" },
+  { slug: "ignore", label: "Ignore", hint: "不留痕" }
 ];
 
 /**
@@ -30,9 +30,26 @@ export function destinationLabel(slug) {
   return (DESTINATIONS.find((entry) => entry.slug === slug) ?? FALLBACK).label;
 }
 
-/** 表单上选的标签 → slug。认不出来的一律按兜底。 */
+/** 表单上那一项显示的完整文字：英文标签 + 一句解释。表单顶部不再放图例，靠这个解释选项。 */
+export function destinationChoice(slug) {
+  const entry = DESTINATIONS.find((item) => item.slug === slug) ?? FALLBACK;
+  return `${entry.label} · ${entry.hint}`;
+}
+
+/**
+ * 表单回传的值 → slug。认不出来的一律按兜底。
+ *
+ * 容错一层：表单上的选项文字是「Restate · 只带回主线说一次」（`enumNames`），宿主理应回传
+ * 枚举值 `Restate`，但万一它回传的是显示文字，`destinationSlug` 也认。认不出来的代价是
+ * 静默落成 Ignore——用户点了什么都没发生，且看不出来——所以这里宁可宽一点。
+ */
 export function destinationSlug(label) {
-  return DESTINATIONS.find((entry) => entry.label === label)?.slug ?? DEFAULT_DESTINATION;
+  const text = String(label ?? "").trim();
+  const exact = DESTINATIONS.find((entry) => entry.label === text || entry.slug === text);
+  if (exact) return exact.slug;
+
+  const head = text.split("·")[0]?.trim();
+  return DESTINATIONS.find((entry) => entry.label === head)?.slug ?? DEFAULT_DESTINATION;
 }
 
 /**

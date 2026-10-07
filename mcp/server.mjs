@@ -7,13 +7,13 @@
 import { readFile } from "node:fs/promises";
 import { createInterface } from "node:readline";
 
-import { listTypes, resolveType, suggestedType } from "../logic/config.mjs";
+import { listTypes } from "../logic/config.mjs";
 import {
   DESTINATIONS,
   destinationLabel,
-  destinationSlug,
-  suggestionSlug
+  destinationSlug
 } from "../logic/destination.mjs";
+import { buildLandingForm } from "../logic/landing-form.mjs";
 import {
   addRestatements,
   commitItems,
@@ -55,7 +55,8 @@ const STATEMENT_SCHEMA = {
   properties: {
     statement: {
       type: "string",
-      description: "一句话断言。选「复述」时，这段文本就是被带回主线的那段，尽量照抄原话。"
+      description:
+        "一句话断言。它会预填进表单上那个可编辑的「内容」框——用户改了就按他改的写。选「复述」时，这段文本就是被带回主线的那段，尽量照抄原话。"
     },
     type: {
       type: "string",
@@ -111,7 +112,7 @@ const TOOLS = [
     name: "align_land",
     title: "落地（原生表单）",
     description:
-      "把候选断言交给用户，用宿主原生的 elicitation 表单逐条选去哪：「Align」写进 ALIGNMENT.md 以后每轮带上、「Restate」只带回主线说一次、「Ignore」不留痕。表单默认停在你在每条候选上给的 destination 建议上；用户整张表单都不想决定时按 skip，账本不动。主线程和侧聊都能用——在侧聊里用它，就是把结论搬回主线的正路。root 省略时用插件进程的工作目录，主 Agent 应当把当前工作区的绝对路径传进来。",
+      "把候选断言交给用户，用宿主原生的 elicitation 表单逐条选去哪：「Align」写进 ALIGNMENT.md 以后每轮带上、「Restate」只带回主线说一次、「Ignore」不留痕。每条候选在表单上是两个字段——一个可编辑的「内容」框（预填你写的 statement，用户改了就按他改的写），一个「去哪」的选择。表单默认停在你在每条候选上给的 destination 建议上；用户整张表单都不想决定时按 skip，账本不动。主线程和侧聊都能用——在侧聊里用它，就是把结论搬回主线的正路。root 省略时用插件进程的工作目录，主 Agent 应当把当前工作区的绝对路径传进来。",
     inputSchema: {
       type: "object",
       properties: {
@@ -265,10 +266,6 @@ function assertDrafts(items) {
       throw Object.assign(new Error("每条断言都需要非空的 statement"), { code: -32602 });
     }
   }
-}
-
-function typeLabel(types, slug) {
-  return types.find((entry) => entry.slug === slug)?.label ?? slug;
 }
 
 /** 取代与警告这两段在 align_commit / align_land 里都要出，写一次。 */
@@ -443,49 +440,17 @@ async function callTool(name, params) {
         };
       }
 
-      const config = await readConfig(root);
-      const types = listTypes(config);
-      const fallbackType = suggestedType(config);
-
       // 用户唯一要判断的事是"这段东西去哪"。分类不让用户选——类型退化成标签，由模型在
-      // 背后给（工单 15）。表单默认停在模型给的建议上，用户随时改。
-      //
-      // 三个选项：Align / Restate / Ignore。Ignore 是逐条丢弃；表单自带的 skip 按钮是
-      // 另一回事——整张表单都不想决定。一条候选一次只问一遍。
-      //
-      // **宿主不会预选。** elicitation 表单初始化状态时直接跳过选择型字段
-      // （app 里那个 `if (vXn(schema)) continue;`——string + enum/oneOf/anyOf 都算），
-      // default 只对文本、布尔、数字生效。这是故意不给"默认"的：选择型字段不该被静默接受。
-      // 所以建议只能落在三处：枚举顺序（建议排第一，开下拉直接回车就是它）、条目的描述文字
-      // （「建议 Restate」）、以及提交时对空值的处理（按建议走，见下面循环）。
-      //
-      // elicitation 的 schema 只有扁平属性表，没有嵌套列表，所以一条候选占一个属性。
-      const properties = {};
-      const slots = candidates.map((candidate, index) => {
-        const key = `c${index + 1}`;
-        const suggestion = suggestionSlug(candidate.destination);
-        const type = resolveType(config, candidate.type ?? fallbackType);
-        const suggestedLabel = destinationLabel(suggestion);
-
-        properties[key] = {
-          type: "string",
-          title: candidate.statement,
-          description: `第 ${index + 1} 条 · 建议${suggestedLabel} · 标签 ${typeLabel(types, type)}`,
-          // 建议的那一项放最前面，同时也写进 default：宿主若不认 default，枚举的第一项
-          // 就是落点，效果一样。用户不改就是同意这个建议。
-          enum: [suggestedLabel, ...DESTINATIONS.map((entry) => entry.label).filter((label) => label !== suggestedLabel)],
-          default: suggestedLabel
-        };
-        return { key, candidate, suggestion, type };
-      });
-
-      const menu = DESTINATIONS.map((entry) => `${entry.label} = ${entry.hint}`).join("\n");
+      // 背后给（工单 15）。表单的形状（两个字段一条候选、选项文字里带解释、为什么不能加
+      // hover 说明）全在 logic/landing-form.mjs 里，那里有测试盯着。
+      const config = await readConfig(root);
+      const { message, properties, slots } = buildLandingForm(candidates, config);
 
       let response;
       try {
         response = await requestHost("elicitation/create", {
           mode: "form",
-          message: `align：逐条选去哪，共 ${candidates.length} 条。\n${menu}\n每条的描述里写着它自己的建议；没动过的那条就按建议处理。整张表单都不想决定就按 skip，账本不会动。`,
+          message,
           requestedSchema: { type: "object", properties, required: [] }
         });
       } catch (error) {
@@ -513,22 +478,26 @@ async function callTool(name, params) {
       const chosen = [];
       const restatements = [];
 
-      for (const { key, candidate, suggestion, type } of slots) {
+      for (const { choiceKey, textKey, candidate, suggestion, type } of slots) {
         // 空值按建议处理。宿主不预选选择型字段（见上面的说明），所以"没动过"在回传里就是
         // 缺这个 key——表单顶部那句"没动过的那条按它的建议处理"把这件事讲明白了，
         // 用户不改就是同意模型的建议。
-        const raw = content[key];
+        const raw = content[choiceKey];
         const picked = typeof raw === "string" && raw.trim() ? raw.trim() : destinationLabel(suggestion);
         const destination = destinationSlug(picked);
 
+        // 内容框是预填的：用户没动就是原句，动过就用他改的那句。落地与复述都用它。
+        const edited = content[textKey];
+        const statement = typeof edited === "string" && edited.trim() ? edited.trim() : candidate.statement;
+
         if (destination === "land") {
           chosen.push({
-            statement: candidate.statement,
+            statement,
             type,
             supersedes: typeof candidate.supersedes === "string" ? candidate.supersedes.trim() : ""
           });
         }
-        else if (destination === "restate") restatements.push(candidate.statement);
+        else if (destination === "restate") restatements.push(statement);
       }
 
       if (chosen.length === 0 && restatements.length === 0) {
@@ -677,7 +646,7 @@ async function handle(message) {
           tools: { listChanged: false },
           resources: { subscribe: false, listChanged: false }
         },
-        serverInfo: { name: "align", version: "0.2.14" }
+        serverInfo: { name: "align", version: "0.2.15" }
       });
       return;
 

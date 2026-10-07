@@ -30,6 +30,11 @@ export function listTypes(config) {
   }));
 }
 
+/** slug → 中文标签。认不出来就原样回落成 slug。 */
+export function typeLabel(types, slug) {
+  return types.find((entry) => entry.slug === slug)?.label ?? slug;
+}
+
 /** 模型的候选断言没给类型时的兜底：列表里的第一个。 */
 export function suggestedType(config) {
   return listTypes(config)[0]?.slug;
