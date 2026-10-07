@@ -1,6 +1,6 @@
 # 05 — 线程层落地（注入通道）
 
-Status: open
+Status: wontfix
 Blocked by: 02, 03
 Type: task
 
@@ -32,3 +32,8 @@ Type: task
 - `.scratch/align/spec.md` 的"两个杠杆的确切行为"
 - `GLOSSARY.md`：落地（线程层）
 
+## 结论（2026-10-05）
+
+不做了。`ui/update-model-context` 是一次性附着，之后靠对话历史承重、压缩即失效——而需求是"每轮都要拿到"，只有落文件能满足。每轮注入改走 `UserPromptSubmit` 钩子（工单 12），理由与实测见那张票和 [docs/discussion.md](../../../docs/discussion.md)。
+
+线程**作用域**本身没废，只是暂缓：钩子拿得到 `session_id`，按线程渲染技术上可行，等有明确问题再做。

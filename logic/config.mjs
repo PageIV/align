@@ -3,36 +3,44 @@
 // 类型是开放集合：增删类型只改配置，不改代码。所以下面这张默认值表是**唯一**允许出现
 // 类型 slug 的地方——logic/no-hardcoded-types.test.mjs 盯着这一条。
 //
-// 只认"顶层键 + [types.<slug>] 段"，够薄闭环用。任何没写 restate 的类型一律按静默处理，
-// 默认值必须是安全的那个。
+// 类型只是**标签**：它决定账本与热块里的行首前缀，不决定行为。曾经有一条 restate
+// 类型策略（类型决定落地后要不要复述），随工单 15 退役——目的地由用户在表单上显式选，
+// 不再由类型推。所以这里不再有"策略"这回事，只剩 slug 与中文标签的映射。
+//
+// 只认"顶层键 + [types.<slug>] 段"，够薄闭环用。
 
-/** 出厂默认类型表。顺序就是面板里的展示顺序。 */
+/** 出厂默认类型表。顺序就是账本与热块里的展示顺序。 */
 export const DEFAULT_TYPES = [
-  { slug: "concept-alignment", label: "概念对齐", restate: false },
-  { slug: "error-correction", label: "错误纠正", restate: true },
-  { slug: "direction-correction", label: "方向纠偏", restate: true },
-  { slug: "detail-completion", label: "细节填充", restate: false }
+  { slug: "concept-alignment", label: "概念对齐" },
+  { slug: "error-correction", label: "错误纠正" },
+  { slug: "direction-correction", label: "方向纠偏" },
+  { slug: "detail-completion", label: "细节填充" }
 ];
 
 export const DEFAULT_CONFIG = { hot_block_max_items: 20, types: {} };
 
-/** 每类条目落地后的行为。配置里没声明的类型一律静默。 */
-export function typePolicy(config, type) {
-  return { restate: config?.types?.[type]?.restate === true };
-}
-
-/** 面板要的类型列表。顺序稳定，标签回落成 slug。 */
+/** 已知类型列表。顺序稳定，标签回落成 slug。 */
 export function listTypes(config) {
   return Object.entries(config?.types ?? {}).map(([slug, entry]) => ({
     slug,
-    label: entry?.label ?? slug,
-    restate: entry?.restate === true
+    label: entry?.label ?? slug
   }));
 }
 
-/** 建议类型：列表里的第一个。 */
+/** 模型的候选断言没给类型时的兜底：列表里的第一个。 */
 export function suggestedType(config) {
   return listTypes(config)[0]?.slug;
+}
+
+/**
+ * 模型给的类型 → 已知 slug。写 slug 或写中文标签都认；认不出来就用兜底。
+ * 类型只是标签，标错只影响账本与热块里的前缀，不影响任何行为。
+ */
+export function resolveType(config, value) {
+  const text = String(value ?? "").trim();
+  const types = listTypes(config);
+  const match = types.find((type) => type.slug === text) ?? types.find((type) => type.label === text);
+  return match?.slug ?? suggestedType(config);
 }
 
 /** 出厂配置：默认类型先铺进 types，配置文件再往上盖。 */

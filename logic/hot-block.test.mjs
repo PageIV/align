@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { renderHotBlock, readHotBlock, upsertHotBlock } from "./hot-block.mjs";
+import { renderHotBlock, removeHotBlock } from "./hot-block.mjs";
 
 const ITEMS = [
   {
@@ -36,39 +36,33 @@ test("超过上限时截断，账本不受影响", () => {
   }));
   const block = renderHotBlock(many, { maxItems: 2 });
   assert.equal(block.match(/^- \[C-/gm).length, 2);
-  assert.equal(readHotBlock(block).startsWith("<!-- align:begin -->"), true);
 });
 
-test("文件里没有区块时追加到末尾，并保留原有内容", () => {
-  const original = "# AGENTS\n\n## Agent skills\n\n这里是用户自己的内容。\n";
-  const result = upsertHotBlock(original, renderHotBlock(ITEMS));
+const WITH_BLOCK = [
+  "# AGENTS",
+  "",
+  "## Agent skills",
+  "",
+  "这里是用户自己的内容。",
+  "",
+  renderHotBlock(ITEMS),
+  ""
+].join("\n");
 
-  assert.match(result, /这里是用户自己的内容。/);
-  assert.ok(result.indexOf("这里是用户自己的内容。") < result.indexOf("<!-- align:begin -->"));
-  assert.ok(result.endsWith("<!-- align:end -->\n"));
+test("退役：没有区块时原样返回", () => {
+  const original = "# AGENTS\n\n用户的内容。\n";
+  assert.equal(removeHotBlock(original), original);
 });
 
-test("文件里有区块时就地替换，不追加第二份", () => {
-  const first = upsertHotBlock("# AGENTS\n", renderHotBlock(ITEMS));
-  const second = upsertHotBlock(first, renderHotBlock([{ ...ITEMS[0], statement: "改过的断言。" }]));
+test("退役：摘掉区块，用户自己的内容一字不动", () => {
+  const result = removeHotBlock(WITH_BLOCK);
 
-  assert.equal(second.match(/<!-- align:begin -->/g).length, 1);
-  assert.match(second, /改过的断言。/);
-  assert.doesNotMatch(second, /我们同意这么说/);
+  assert.doesNotMatch(result, /align:begin/);
+  assert.doesNotMatch(result, /我们同意这么说/);
+  assert.equal(result, "# AGENTS\n\n## Agent skills\n\n这里是用户自己的内容。\n");
 });
 
-test("幂等：同样的 block 写两次，字节一致", () => {
-  const once = upsertHotBlock("# AGENTS\n", renderHotBlock(ITEMS));
-  const twice = upsertHotBlock(once, renderHotBlock(ITEMS));
-  assert.equal(twice, once);
-});
-
-test("空文件也能长出区块", () => {
-  const result = upsertHotBlock("", renderHotBlock(ITEMS));
-  assert.ok(result.startsWith("<!-- align:begin -->"));
-  assert.equal(upsertHotBlock(result, renderHotBlock(ITEMS)), result);
-});
-
-test("返回 null 而不是抛错，当文件里没有区块", () => {
-  assert.equal(readHotBlock("# 什么都没有\n"), null);
+test("退役：区块在中间时不把上下文粘在一起", () => {
+  const text = "上面。\n\n<!-- align:begin -->\n中间\n<!-- align:end -->\n\n下面。\n";
+  assert.equal(removeHotBlock(text), "上面。\n\n下面。\n");
 });

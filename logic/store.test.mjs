@@ -1,18 +1,37 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { commitItems, readItems } from "./store.mjs";
+import {
+  addRestatements,
+  commitItems,
+  readInbox,
+  readItems,
+  readSessionMarker,
+  retireItem,
+  reviseItem,
+  takeRestatements,
+  writeSessionMarker
+} from "./store.mjs";
 
 const DATE = "2026-10-04";
+const AT = "2026-10-05T10:12:00.000Z";
 
 async function scratchDir() {
   return mkdtemp(join(tmpdir(), "align-store-"));
 }
 
-test("第一条落地就长出账本和热块", async () => {
+const OLD_BLOCK = [
+  "<!-- align:begin -->",
+  "## 已确认前提（由 align 维护，勿手改）",
+  "",
+  "- [C-001] concept-alignment：旧的受注块。",
+  "<!-- align:end -->"
+].join("\n");
+
+test("第一条落地就长出账本", async () => {
   const root = await scratchDir();
   const { created } = await commitItems(
     root,
@@ -25,23 +44,16 @@ test("第一条落地就长出账本和热块", async () => {
 
   const ledger = await readFile(join(root, "ALIGNMENT.md"), "utf8");
   assert.match(ledger, /C-001/);
-
-  const agents = await readFile(join(root, "AGENTS.md"), "utf8");
-  assert.match(agents, /<!-- align:begin -->/);
-  assert.match(agents, /确认项不含真伪判定。/);
+  assert.match(ledger, /确认项不含真伪判定。/);
 });
 
-test("第二条接着编号，热块跟着更新", async () => {
+test("第二条接着编号", async () => {
   const root = await scratchDir();
   await commitItems(root, [{ statement: "第一条。" }], { date: DATE });
   const { created } = await commitItems(root, [{ statement: "第二条。" }], { date: DATE });
 
   assert.equal(created[0].id, "C-002");
-
-  const agents = await readFile(join(root, "AGENTS.md"), "utf8");
-  assert.equal(agents.match(/<!-- align:begin -->/g).length, 1);
-  assert.match(agents, /第一条。/);
-  assert.match(agents, /第二条。/);
+  assert.deepEqual((await readItems(root)).map((item) => item.id), ["C-001", "C-002"]);
 });
 
 test("用户自己的 AGENTS.md 内容一个字节不动", async () => {
@@ -51,12 +63,43 @@ test("用户自己的 AGENTS.md 内容一个字节不动", async () => {
 
   await commitItems(root, [{ statement: "某条。" }], { date: DATE });
 
-  const agents = await readFile(join(root, "AGENTS.md"), "utf8");
-  assert.ok(agents.startsWith(original.replace(/\s+$/, "")));
-  assert.match(agents, /用户的内容。/);
+  assert.equal(await readFile(join(root, "AGENTS.md"), "utf8"), original);
 });
 
-test("同一次提交里的多条断言编号连续", async () => {
+test("没有 AGENTS.md 时不凭空造一个", async () => {
+  const root = await scratchDir();
+  await commitItems(root, [{ statement: "某条。" }], { date: DATE });
+
+  await assert.rejects(() => stat(join(root, "AGENTS.md")), { code: "ENOENT" });
+});
+
+test("老仓库的受注块被摘掉，其余内容逐字节不变", async () => {
+  const root = await scratchDir();
+  const original = `# AGENTS\n\n## Agent skills\n\n用户的内容。\n\n${OLD_BLOCK}\n`;
+  await writeFile(join(root, "AGENTS.md"), original, "utf8");
+
+  await commitItems(root, [{ statement: "新的一条。" }], { date: DATE });
+
+  const agents = await readFile(join(root, "AGENTS.md"), "utf8");
+  assert.doesNotMatch(agents, /align:begin/);
+  assert.doesNotMatch(agents, /旧的受注块/);
+  assert.equal(agents, "# AGENTS\n\n## Agent skills\n\n用户的内容。\n");
+});
+
+test("受注块在文件中间时不把上下文粘在一起", async () => {
+  const root = await scratchDir();
+  await writeFile(
+    join(root, "AGENTS.md"),
+    `上面。\n\n${OLD_BLOCK}\n\n下面。\n`,
+    "utf8"
+  );
+
+  await commitItems(root, [{ statement: "某条。" }], { date: DATE });
+
+  assert.equal(await readFile(join(root, "AGENTS.md"), "utf8"), "上面。\n\n下面。\n");
+});
+
+test("同一次落地里的多条断言编号连续", async () => {
   const root = await scratchDir();
   const { created } = await commitItems(
     root,
@@ -66,17 +109,6 @@ test("同一次提交里的多条断言编号连续", async () => {
 
   assert.deepEqual(created.map((item) => item.id), ["C-001", "C-002", "C-003"]);
   assert.deepEqual((await readItems(root)).map((item) => item.id), ["C-001", "C-002", "C-003"]);
-});
-
-test("配置里的上限被遵守", async () => {
-  const root = await scratchDir();
-  await mkdir(join(root, ".align"), { recursive: true });
-  await writeFile(join(root, ".align", "config.toml"), "hot_block_max_items = 1\n", "utf8");
-
-  await commitItems(root, [{ statement: "甲。" }, { statement: "乙。" }], { date: DATE });
-
-  const agents = await readFile(join(root, "AGENTS.md"), "utf8");
-  assert.equal(agents.match(/^- \[C-/gm).length, 1);
 });
 
 test("落地时把配置一并带回来，类型按配置解析", async () => {
@@ -92,4 +124,233 @@ test("落地时把配置一并带回来，类型按配置解析", async () => {
 
   assert.deepEqual(created.map((item) => item.type), ["foo", "concept-alignment"]);
   assert.match(JSON.stringify(config), /新花样/);
+});
+
+test("复述写进项目里的收件箱，投递一次就没了", async () => {
+  const root = await scratchDir();
+  await addRestatements(root, ["把这段带回去。", "还有这段。"], { at: AT, session: "side-1" });
+
+  assert.match(await readFile(join(root, ".align", "inbox.md"), "utf8"), /把这段带回去。/);
+
+  const taken = await takeRestatements(root, { session: "main-1", isMain: true });
+  assert.deepEqual(
+    taken.map((entry) => entry.text),
+    ["把这段带回去。", "还有这段。"]
+  );
+  assert.deepEqual(await readInbox(root), []);
+});
+
+test("侧聊问一句吃不掉收件箱——新开的侧聊也不行", async () => {
+  const root = await scratchDir();
+  await addRestatements(root, ["甲。"], { at: AT, session: "side-1" });
+
+  assert.deepEqual(await takeRestatements(root, { session: "side-2", isMain: false }), []);
+  assert.deepEqual(
+    (await readInbox(root)).map((entry) => entry.text),
+    ["甲。"]
+  );
+});
+
+test("收件箱放在项目里：A 项目的复述 B 项目吃不到", async () => {
+  const a = await scratchDir();
+  const b = await scratchDir();
+  await addRestatements(a, ["甲项目的复述。"], { at: AT, session: "side-1" });
+
+  assert.deepEqual(await takeRestatements(b, { session: "main-b", isMain: true }), []);
+  assert.deepEqual(
+    (await takeRestatements(a, { session: "main-a", isMain: true })).map((entry) => entry.text),
+    ["甲项目的复述。"]
+  );
+});
+
+test("没有账本的项目也能写收件箱——目录按需长出来", async () => {
+  const root = await scratchDir();
+  await addRestatements(root, ["甲。"], { at: AT });
+
+  await assert.rejects(() => stat(join(root, "ALIGNMENT.md")), { code: "ENOENT" });
+  assert.deepEqual(
+    (await readInbox(root)).map((entry) => entry.text),
+    ["甲。"]
+  );
+});
+
+test("取代：新条目照落，旧条目标成 superseded by 新编号，历史留着", async () => {
+  const root = await scratchDir();
+  await commitItems(root, [{ statement: "旧的写法。" }], { date: DATE });
+
+  const { created, replaced, warnings, items } = await commitItems(
+    root,
+    [{ statement: "新的写法。", supersedes: "C-001" }],
+    { date: DATE }
+  );
+
+  assert.deepEqual(created.map((item) => item.id), ["C-002"]);
+  assert.deepEqual(replaced, [{ from: "C-001", to: "C-002" }]);
+  assert.deepEqual(warnings, []);
+
+  const old = items.find((item) => item.id === "C-001");
+  assert.equal(old.status, "superseded by C-002");
+  assert.equal(old.statement, "旧的写法。", "旧条目的断言一个字节都不动");
+
+  const ledger = await readFile(join(root, "ALIGNMENT.md"), "utf8");
+  assert.match(ledger, /状态：superseded by C-002/);
+  assert.ok(ledger.indexOf("## 已失效") < ledger.indexOf("旧的写法。"), "旧条目落在已失效区");
+});
+
+test("取代的目标不在账本里：断言照落，只丢关系，并且报出来", async () => {
+  const root = await scratchDir();
+
+  const { created, replaced, warnings } = await commitItems(
+    root,
+    [{ statement: "新的写法。", supersedes: "C-099" }],
+    { date: DATE }
+  );
+
+  assert.deepEqual(created.map((item) => item.id), ["C-001"], "用户确认过的断言不能因为填错编号就丢");
+  assert.deepEqual(replaced, []);
+  assert.match(warnings[0], /C-099 不在账本里/);
+});
+
+test("同一次取代被重放：不重复长出第二条断言", async () => {
+  const root = await scratchDir();
+  await commitItems(root, [{ statement: "旧的写法。" }], { date: DATE });
+  await commitItems(root, [{ statement: "新的写法。", supersedes: "C-001" }], { date: DATE });
+
+  const { created, replaced, warnings, items } = await commitItems(
+    root,
+    [{ statement: "新的写法。", supersedes: "C-001" }],
+    { date: DATE }
+  );
+
+  assert.deepEqual(created, []);
+  assert.deepEqual(replaced, []);
+  assert.equal(items.length, 2, "账本里还是那两条");
+  assert.match(warnings[0], /已经由 C-002 取代/);
+});
+
+test("取代一条已经失效、但断言不同的条目：新条目照落，旧的链不动", async () => {
+  const root = await scratchDir();
+  await commitItems(root, [{ statement: "第一版。" }, { statement: "第二版。" }], { date: DATE });
+  await commitItems(root, [{ statement: "第三版。", supersedes: "C-001" }], { date: DATE });
+
+  const { created, warnings, items } = await commitItems(
+    root,
+    [{ statement: "第四版。", supersedes: "C-001" }],
+    { date: DATE }
+  );
+
+  assert.deepEqual(created.map((item) => item.id), ["C-004"]);
+  assert.equal(items.find((item) => item.id === "C-001").status, "superseded by C-003", "原有的链没被改写");
+  assert.match(warnings[0], /已经是失效条目/);
+});
+
+test("“这一轮在哪”的标记按项目分开存，读不到就是不认识", async () => {
+  const a = await scratchDir();
+  const b = await scratchDir();
+
+  assert.equal(await readSessionMarker(a), null);
+
+  await writeSessionMarker(a, { session_id: "main-1", transcript: "/tmp/rollout.jsonl", at: AT });
+
+  assert.equal((await readSessionMarker(a)).session_id, "main-1");
+  assert.equal(await readSessionMarker(b), null);
+});
+
+test("改措辞 = 取代：旧的留在原地，新的接上编号", async () => {
+  const root = await scratchDir();
+  await commitItems(root, [{ statement: "旧的措辞。", type: "detail-completion" }], { date: DATE });
+
+  const result = await reviseItem(root, {
+    id: "C-001",
+    statement: "新的措辞。",
+    date: DATE,
+    source: "账本面板 · 取代 C-001"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.action, "superseded");
+  assert.equal(result.item.id, "C-002");
+  assert.equal(result.item.type, "detail-completion", "类型跟着旧条目走，除非同时改了标签");
+  assert.equal(result.items.find((item) => item.id === "C-001").status, "superseded by C-002");
+  assert.equal(result.items.find((item) => item.id === "C-001").statement, "旧的措辞。");
+});
+
+test("只改标签：原地改，不留历史", async () => {
+  const root = await scratchDir();
+  await commitItems(root, [{ statement: "某条。", type: "detail-completion" }], { date: DATE });
+
+  const result = await reviseItem(root, { id: "C-001", type: "错误纠正", date: DATE });
+
+  assert.equal(result.action, "relabelled");
+  assert.deepEqual(result.items.map((item) => item.id), ["C-001"], "没有长出新条目");
+  assert.equal(result.items[0].type, "error-correction");
+  assert.equal(result.items[0].statement, "某条。");
+});
+
+test("措辞没变、标签也没变：什么都不写", async () => {
+  const root = await scratchDir();
+  await commitItems(root, [{ statement: "某条。" }], { date: DATE });
+
+  const result = await reviseItem(root, { id: "C-001", statement: "某条。", date: DATE });
+  assert.equal(result.action, "unchanged");
+  assert.deepEqual(result.items.map((item) => item.id), ["C-001"]);
+});
+
+test("失效的条目不给改——用户多半点错了", async () => {
+  const root = await scratchDir();
+  await commitItems(root, [{ statement: "第一版。" }], { date: DATE });
+  await commitItems(root, [{ statement: "第二版。", supersedes: "C-001" }], { date: DATE });
+
+  const result = await reviseItem(root, { id: "C-001", statement: "又想改回来。", date: DATE });
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /已经失效/);
+  assert.equal(result.items.length, 2);
+});
+
+test("改一条不存在的编号：报出来，不写任何东西", async () => {
+  const root = await scratchDir();
+  await commitItems(root, [{ statement: "某条。" }], { date: DATE });
+
+  const result = await reviseItem(root, { id: "C-099", statement: "无中生有。", date: DATE });
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /C-099 不在账本里/);
+  assert.equal(result.items.length, 1);
+});
+
+test("退休：条目留在账本里，但不再生效", async () => {
+  const root = await scratchDir();
+  await commitItems(root, [{ statement: "过时的那条。" }, { statement: "还在用的。" }], { date: DATE });
+
+  const result = await retireItem(root, { id: "C-001" });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.action, "retired");
+  assert.equal(result.items.find((item) => item.id === "C-001").status, "retired");
+  assert.equal(result.items.find((item) => item.id === "C-001").statement, "过时的那条。");
+
+  const ledger = await readFile(join(root, "ALIGNMENT.md"), "utf8");
+  assert.match(ledger, /状态：retired/);
+  assert.ok(ledger.indexOf("## 已失效") < ledger.indexOf("过时的那条。"));
+});
+
+test("退休过的条目再退休：幂等，不报错", async () => {
+  const root = await scratchDir();
+  await commitItems(root, [{ statement: "过时的那条。" }], { date: DATE });
+  await retireItem(root, { id: "C-001" });
+
+  const again = await retireItem(root, { id: "C-001" });
+  assert.equal(again.ok, true);
+  assert.equal(again.action, "unchanged");
+  assert.equal(again.items.length, 1);
+});
+
+test("取代过的条目不能再退休——已经失效了", async () => {
+  const root = await scratchDir();
+  await commitItems(root, [{ statement: "第一版。" }], { date: DATE });
+  await commitItems(root, [{ statement: "第二版。", supersedes: "C-001" }], { date: DATE });
+
+  const result = await retireItem(root, { id: "C-001" });
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /不用再退休/);
+  assert.equal(result.items.find((item) => item.id === "C-001").status, "superseded by C-002");
 });

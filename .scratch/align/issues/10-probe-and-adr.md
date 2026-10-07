@@ -11,7 +11,7 @@ Type: task
 ## 交付
 
 - 探针工具保留（继续叫 `probe_open_panel`），在 README 里写清"app 升级后怎么用它复测"
-- `docs/adr/0002-mcp-apps-two-channels.md`：为什么线程层用 `ui/update-model-context`、复述用 `ui/message`，以及支撑它的实测证据（能力表、一次性附着的实测序列、`-32000` 门控）
+- `docs/adr/0002-*.md`：**要重写**。原本写"为什么线程层用 `ui/update-model-context`"，那条路已作废（工单 05）。改成记真正的载体决策：为什么每轮注入走 `UserPromptSubmit` 钩子而不是 `AGENTS.md` 受管区块，附实测证据（`AGENTS.md` 只有重启才重读、钩子的信任门、注入形态）。工单 12 的 Comments 和 [docs/discussion.md](../../../docs/discussion.md) 是素材
 
 ## 验收标准
 
@@ -23,4 +23,3 @@ Type: task
 
 - `.scratch/align/spec.md` 的"已验证的技术前提"
 - `docs/adr/0001-align-codex-first-host-agnostic-core.md`
-

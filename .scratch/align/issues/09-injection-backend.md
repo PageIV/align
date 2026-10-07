@@ -1,6 +1,6 @@
 # 09 — 注入后端可替换 + 压缩兜底
 
-Status: open
+Status: wontfix
 Blocked by: 05
 Type: task
 
@@ -25,3 +25,6 @@ Type: task
 - `.scratch/align/spec.md` 的"仍未验证"
 - `docs/adr/0001-align-codex-first-host-agnostic-core.md`
 
+## 结论（2026-10-05）
+
+不做了。这张票要解的悬念是"压缩会不会吃掉线程层的那点上下文"，而线程层已经作废（工单 05）——每轮注入改由 `UserPromptSubmit` 钩子从 `ALIGNMENT.md` 现渲染，不依赖对话历史，压缩影响不到它。可替换的注入后端也就没有要替换的东西了。

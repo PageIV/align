@@ -1,4 +1,9 @@
-// AGENTS.md 里的受管区块。每轮被自动读到——这是整套设计唯一的硬保底。
+// 热块的渲染。
+//
+// 热块不是文件，是钩子在每次提问那一刻从 ALIGNMENT.md 现渲染出来的东西。
+// 这里只剩两件事：把生效项渲染成块、把旧的受管区块从 AGENTS.md 里摘掉。
+// 曾经还有一个 upsertHotBlock——把块写进 AGENTS.md。已废弃（工单 13）：
+// AGENTS.md 只在 app 重启或线程重载时读一次，中途改它不会回流到正在进行的线程。
 
 import { isActive } from "./item.mjs";
 
@@ -29,27 +34,23 @@ export function renderHotBlock(items, { maxItems = DEFAULT_MAX_ITEMS } = {}) {
 }
 
 /**
- * 有区块就换成新的，没有就追加到文件末尾。
- * 幂等：同样的 block 写两次，结果字节一致。
+ * 把受管区块从文件里摘掉，其余内容保持原样。
+ *
+ * 退役用：老仓库的 AGENTS.md 里还留着块，落地下一次时顺手清掉。
+ * 没有区块就原样返回——不抛错，也不假装做过什么。
  */
-export function upsertHotBlock(text, block) {
+export function removeHotBlock(text) {
   const source = String(text ?? "");
   const begin = source.indexOf(HOT_BLOCK_BEGIN);
   const end = source.indexOf(HOT_BLOCK_END);
 
-  if (begin !== -1 && end !== -1 && end > begin) {
-    return source.slice(0, begin) + block + source.slice(end + HOT_BLOCK_END.length);
-  }
+  if (begin === -1 || end === -1 || end < begin) return source;
 
-  const trimmed = source.replace(/\s+$/, "");
-  return trimmed ? `${trimmed}\n\n${block}\n` : `${block}\n`;
+  const before = source.slice(0, begin).trimEnd();
+  const after = source.slice(end + HOT_BLOCK_END.length).trimStart().trimEnd();
+  const merged = [before, after].filter(Boolean).join("\n\n");
+
+  return merged ? `${merged}\n` : "";
 }
 
 /** 反向：把区块摘出来，只用来做检查，不参与写入。 */
-export function readHotBlock(text) {
-  const source = String(text ?? "");
-  const begin = source.indexOf(HOT_BLOCK_BEGIN);
-  const end = source.indexOf(HOT_BLOCK_END);
-  if (begin === -1 || end === -1 || end < begin) return null;
-  return source.slice(begin, end + HOT_BLOCK_END.length);
-}

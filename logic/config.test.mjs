@@ -1,39 +1,44 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  DEFAULT_CONFIG,
-  listTypes,
-  parseConfig,
-  suggestedType,
-  typePolicy
-} from "./config.mjs";
+import { DEFAULT_CONFIG, listTypes, parseConfig, suggestedType } from "./config.mjs";
 
 const SAMPLE = `
-# 类型策略：增删类型只改这里。
+# 类型只是标签：增删类型只改这里。
 hot_block_max_items = 5
 
 [types.concept-alignment]
-restate = false
 
 [types.error-correction]
-restate = true
+label = "我错了"
 `;
 
 test("顶层键与类型段都能读出来", () => {
   const config = parseConfig(SAMPLE);
   assert.equal(config.hot_block_max_items, 5);
-  assert.equal(config.types["error-correction"].restate, true);
+  assert.equal(config.types["error-correction"].label, "我错了");
 });
 
-test("没写 restate 的类型一律静默", () => {
-  const config = parseConfig(SAMPLE);
-  assert.deepEqual(typePolicy(config, "detail-completion"), { restate: false });
+test("类型只剩标签，不带任何行为字段", () => {
+  const config = parseConfig("");
+  for (const type of listTypes(config)) {
+    assert.deepEqual(Object.keys(type).sort(), ["label", "slug"]);
+  }
 });
 
-test("完全未知的类型也静默，不抛错", () => {
-  const config = parseConfig(SAMPLE);
-  assert.deepEqual(typePolicy(config, "brand-new-type"), { restate: false });
+test("老配置里的 restate 被忽略，不影响标签", () => {
+  // 工单 15 之前 .align/config.toml 里写着 restate。退役后它是纯粹的陌生键：
+  // 不报错、不生效，标签照旧。
+  const config = parseConfig(`
+[types.error-correction]
+restate = true
+label = "错误纠正"
+`);
+
+  assert.deepEqual(listTypes(config).find((type) => type.slug === "error-correction"), {
+    slug: "error-correction",
+    label: "错误纠正"
+  });
 });
 
 test("注释不会被当成值", () => {
@@ -44,26 +49,24 @@ test("注释不会被当成值", () => {
 test("空输入回落到默认值：上限 + 四个默认类型", () => {
   const config = parseConfig("");
   assert.equal(config.hot_block_max_items, DEFAULT_CONFIG.hot_block_max_items);
-  assert.deepEqual(typePolicy(config, "concept-alignment"), { restate: false });
-  assert.deepEqual(typePolicy(config, "detail-completion"), { restate: false });
-  assert.deepEqual(typePolicy(config, "error-correction"), { restate: true });
-  assert.deepEqual(typePolicy(config, "direction-correction"), { restate: true });
+  assert.deepEqual(
+    listTypes(config).map((type) => type.label),
+    ["概念对齐", "错误纠正", "方向纠偏", "细节填充"]
+  );
 });
 
-test("配置能改默认类型的行为", () => {
-  const config = parseConfig("[types.concept-alignment]\nrestate = true\n");
-  assert.deepEqual(typePolicy(config, "concept-alignment"), { restate: true });
-  assert.deepEqual(typePolicy(config, "error-correction"), { restate: true }, "没被点名的类型仍走默认");
+test("改配置能换掉某个类型的标签", () => {
+  const config = parseConfig('[types.concept-alignment]\nlabel = "对齐口径"\n');
+  assert.equal(listTypes(config)[0].label, "对齐口径");
 });
 
-test("第五类只写在配置里就出现，不写 restate 就是静默", () => {
+test("第五类只写在配置里就出现", () => {
   const config = parseConfig(`${SAMPLE}\n[types.foo]\nlabel = "新花样"\n`);
 
-  assert.deepEqual(typePolicy(config, "foo"), { restate: false });
-  assert.deepEqual(
-    listTypes(config).find((type) => type.slug === "foo"),
-    { slug: "foo", label: "新花样", restate: false }
-  );
+  assert.deepEqual(listTypes(config).find((type) => type.slug === "foo"), {
+    slug: "foo",
+    label: "新花样"
+  });
 });
 
 test("新类型没写 label 时，标签回落成 slug", () => {
@@ -84,7 +87,7 @@ test("类型顺序稳定：默认四类在前，新类型按文件顺序追加",
   assert.deepEqual(slugs.slice(-2), ["zed", "alpha"]);
 });
 
-test("建议类型就是列表里的第一个", () => {
+test("兜底类型就是列表里的第一个", () => {
   const config = parseConfig("");
   assert.equal(suggestedType(config), listTypes(config)[0].slug);
 });

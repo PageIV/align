@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/opt/homebrew/bin/node \"${PLUGIN_ROOT}/hooks/inject-hot-block.mjs\""
+          }
+        ]
+      }
+    ]
+  }
+}

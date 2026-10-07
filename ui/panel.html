@@ -8,46 +8,30 @@
       * { box-sizing: border-box; }
       body {
         margin: 0;
-        padding: 14px;
+        padding: 12px;
         font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
-      h1 { font-size: 14px; margin: 0 0 4px; }
-      .muted { opacity: 0.7; margin: 0 0 12px; }
-      .candidate {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        gap: 6px 8px;
+      header { display: flex; align-items: baseline; gap: 8px; }
+      h1 { font-size: 14px; margin: 0; flex: 1; }
+      h2 { font-size: 12px; margin: 16px 0 6px; opacity: 0.65; font-weight: 600; }
+      .muted { opacity: 0.7; margin: 4px 0; font-size: 12px; }
+      .item {
         padding: 8px;
         border: 1px solid rgba(127, 127, 127, 0.3);
         border-radius: 8px;
         margin-bottom: 8px;
+        word-break: break-word;
       }
-      .candidate input[type="checkbox"] { margin-top: 3px; }
-      .candidate .statement { grid-column: 2; word-break: break-word; }
-      .candidate select {
-        grid-column: 2;
-        font: inherit;
-        padding: 3px 6px;
-        border-radius: 6px;
-        border: 1px solid rgba(127, 127, 127, 0.4);
-        background: transparent;
-        color: inherit;
-      }
-      textarea {
-        width: 100%;
-        min-height: 56px;
-        font: inherit;
-        padding: 6px;
-        border-radius: 6px;
-        border: 1px solid rgba(127, 127, 127, 0.4);
-        background: transparent;
-        color: inherit;
-        resize: vertical;
-      }
-      .row { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+      .item.inactive { opacity: 0.6; }
+      .meta { display: flex; gap: 6px; font-size: 11px; opacity: 0.75; margin-bottom: 4px; }
+      .meta .id { font-variant-numeric: tabular-nums; }
+      .statement { margin: 0; overflow-wrap: anywhere; }
+      .actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+      .chips { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
       button {
         font: inherit;
-        padding: 6px 12px;
+        font-size: 12px;
+        padding: 4px 10px;
         border-radius: 6px;
         border: 1px solid currentColor;
         background: transparent;
@@ -56,7 +40,28 @@
       }
       button:hover:not(:disabled) { background: rgba(127, 127, 127, 0.15); }
       button:disabled { opacity: 0.45; cursor: default; }
-      .scope { opacity: 0.7; }
+      .chip {
+        font-size: 11px;
+        padding: 3px 9px;
+        border-radius: 999px;
+        opacity: 0.7;
+      }
+      .chip.on {
+        opacity: 1;
+        background: rgba(127, 127, 127, 0.22);
+      }
+      textarea {
+        width: 100%;
+        font: inherit;
+        padding: 6px;
+        border-radius: 6px;
+        border: 1px solid rgba(127, 127, 127, 0.4);
+        /* 别用 transparent：宿主 iframe 里的底色不由我们定，透明会让文字和背景撞色。 */
+        background-color: rgba(127, 127, 127, 0.12);
+        color: inherit;
+      }
+      textarea { min-height: 56px; resize: vertical; margin-bottom: 6px; }
+      .result:empty { display: none; }
       .result {
         margin-top: 12px;
         padding: 8px;
@@ -66,41 +71,49 @@
         white-space: pre-wrap;
         word-break: break-word;
       }
-      .result:empty { display: none; }
-      .hint { font-size: 11px; opacity: 0.65; margin-top: 8px; }
+      .hint { font-size: 11px; opacity: 0.65; margin-top: 10px; }
+      code { font-size: 11px; }
     </style>
   </head>
   <body>
-    <h1>对齐</h1>
+    <header>
+      <h1>对齐账本</h1>
+      <button id="refresh" disabled>刷新</button>
+    </header>
     <p class="muted" id="status">正在与宿主握手…</p>
 
-    <div id="candidates"></div>
+    <section>
+      <h2>生效中</h2>
+      <div id="active"></div>
+    </section>
 
-    <textarea id="draft" placeholder="再加一条断言…"></textarea>
-
-    <div class="row">
-      <button id="land" disabled>落地到项目层</button>
-      <span class="scope">作用域：项目层</span>
-    </div>
-
-    <p class="hint">
-      项目层写进 <code>ALIGNMENT.md</code>，并更新 <code>AGENTS.md</code> 里的受管区块——每轮自动生效，活过新会话。
-    </p>
+    <section id="inactiveSection" hidden>
+      <h2>已失效</h2>
+      <div id="inactive"></div>
+    </section>
 
     <div class="result" id="result"></div>
+
+    <p class="hint">
+      这里改的是<strong>已经落下的</strong>条目。新条目走对话里的原生表单（<code>align_land</code>），不从这个面板落地。
+    </p>
 
     <script>
       (() => {
         const statusEl = document.getElementById("status");
-        const candidatesEl = document.getElementById("candidates");
-        const draftEl = document.getElementById("draft");
-        const landEl = document.getElementById("land");
+        const activeEl = document.getElementById("active");
+        const inactiveEl = document.getElementById("inactive");
+        const inactiveSection = document.getElementById("inactiveSection");
+        const refreshEl = document.getElementById("refresh");
         const resultEl = document.getElementById("result");
 
         let nextId = 1;
         let hostReady = false;
+        // 正在编辑的那条：{ id, statement, type }。null = 没有在编辑。
+        let editing = null;
+        let displayMode = "inline";
         const pending = new Map();
-        const context = { root: null, candidates: [], types: [], suggested: null };
+        const state = { root: null, items: [], types: [], active: 0, total: 0 };
 
         function request(method, params) {
           const id = nextId++;
@@ -112,63 +125,192 @@
           window.parent.postMessage({ jsonrpc: "2.0", method, params }, "*");
         }
 
-        function renderCandidates() {
-          candidatesEl.textContent = "";
-
-          context.candidates.forEach((candidate, index) => {
-            const row = document.createElement("div");
-            row.className = "candidate";
-
-            const box = document.createElement("input");
-            box.type = "checkbox";
-            box.checked = candidate.selected !== false;
-            box.dataset.index = String(index);
-
-            const statement = document.createElement("div");
-            statement.className = "statement";
-            statement.textContent = candidate.statement;
-
-            const select = document.createElement("select");
-            const chosen = candidate.type ?? context.suggested;
-            for (const { slug, label } of context.types) {
-              const option = document.createElement("option");
-              option.value = slug;
-              option.textContent = label;
-              if (chosen === slug) option.selected = true;
-              select.append(option);
-            }
-
-            row.append(box, statement, select);
-            candidatesEl.append(row);
-          });
-
-          updateLandState();
+        function labelOf(slug) {
+          return state.types.find((type) => type.slug === slug)?.label ?? slug;
         }
 
-        /** 按钮只在真的有东西可落地、且宿主已经握手时才亮。 */
-        function updateLandState() {
-          const hasWork =
-            context.candidates.some((candidate) => candidate.selected !== false) ||
-            draftEl.value.trim() !== "";
-          landEl.disabled = !hostReady || !hasWork;
+        function isActive(item) {
+          return item.status === "active";
         }
 
-        function collect() {
-          const items = [];
+        /** 状态那一栏写给用户看：取代的有链，退休的就一个字。 */
+        function statusText(item) {
+          if (item.status === "retired") return "已退休";
+          const match = /^superseded by (C-\d+)$/.exec(item.status);
+          if (match) return `已由 ${match[1]} 取代`;
+          return item.status;
+        }
 
-          for (const row of candidatesEl.querySelectorAll(".candidate")) {
-            const box = row.querySelector('input[type="checkbox"]');
-            const select = row.querySelector("select");
-            if (!box.checked) continue;
-            const candidate = context.candidates[Number(box.dataset.index)];
-            items.push({ statement: candidate.statement, type: select.value || undefined });
+        function button(text, handler, disabled = false) {
+          const el = document.createElement("button");
+          el.textContent = text;
+          el.disabled = disabled;
+          el.addEventListener("click", handler);
+          return el;
+        }
+
+        function renderActiveItem(item) {
+          const card = document.createElement("article");
+          card.className = "item";
+
+          const meta = document.createElement("div");
+          meta.className = "meta";
+          for (const text of [item.id, labelOf(item.type), item.date]) {
+            const span = document.createElement("span");
+            span.textContent = text;
+            meta.append(span);
           }
 
-          const draft = draftEl.value.trim();
-          if (draft) items.push({ statement: draft, type: context.suggested ?? undefined });
+          if (editing?.id === item.id) {
+            const box = document.createElement("textarea");
+            box.value = editing.statement;
+            box.addEventListener("input", () => {
+              editing.statement = box.value;
+            });
 
-          return items;
+            // 类型用一排小按钮，不用 <select>：原生的下拉在宿主的 iframe 里底色不由我们定，
+            // 收起状态会撞色成一片空白（2026-10-07 真机发现的）。按钮没有这个问题，也更窄。
+            const chips = document.createElement("div");
+            chips.className = "chips";
+            for (const type of state.types) {
+              const chip = button(type.label, () => {
+                editing.type = type.slug;
+                for (const el of chips.children) el.classList.toggle("on", el.textContent === type.label);
+              });
+              chip.className = `chip${type.slug === editing.type ? " on" : ""}`;
+              chips.append(chip);
+            }
+
+            const actions = document.createElement("div");
+            actions.className = "actions";
+            actions.append(
+              button("保存（取代）", () => save(item, editing.statement, editing.type), !hostReady),
+              button("取消", () => {
+                editing = null;
+                render();
+              })
+            );
+
+            card.append(meta, box, chips, actions);
+            return card;
+          }
+
+          const statement = document.createElement("p");
+          statement.className = "statement";
+          statement.textContent = item.statement;
+
+          const actions = document.createElement("div");
+          actions.className = "actions";
+          actions.append(
+            button("改", () => {
+              editing = { id: item.id, statement: item.statement, type: item.type };
+              resultEl.textContent = "";
+              render();
+            }, !hostReady),
+            button("退休", () => retire(item), !hostReady)
+          );
+
+          card.append(meta, statement, actions);
+          return card;
         }
+
+        function renderInactiveItem(item) {
+          const card = document.createElement("article");
+          card.className = "item inactive";
+
+          const meta = document.createElement("div");
+          meta.className = "meta";
+          for (const text of [item.id, statusText(item), item.date]) {
+            const span = document.createElement("span");
+            span.textContent = text;
+            meta.append(span);
+          }
+
+          const statement = document.createElement("p");
+          statement.className = "statement";
+          statement.textContent = item.statement;
+
+          card.append(meta, statement);
+          return card;
+        }
+
+        function render() {
+          const active = state.items.filter(isActive);
+          const inactive = state.items.filter((item) => !isActive(item));
+
+          activeEl.textContent = "";
+          inactiveEl.textContent = "";
+
+          if (active.length === 0) {
+            const empty = document.createElement("p");
+            empty.className = "muted";
+            empty.textContent = "还没有生效的已确认项。";
+            activeEl.append(empty);
+          } else {
+            for (const item of active) activeEl.append(renderActiveItem(item));
+          }
+
+          inactiveSection.hidden = inactive.length === 0;
+          for (const item of inactive) inactiveEl.append(renderInactiveItem(item));
+
+          if (hostReady) {
+            statusEl.textContent = `生效 ${active.length} 条 · 已失效 ${inactive.length} 条`;
+          }
+        }
+
+        /** 面板要开在侧面、不要占着主线：握手之后立刻要求全屏（宿主里就是侧边面板）。 */
+        async function openInSidePanel() {
+          const response = await withTimeout(
+            request("ui/request-display-mode", { mode: "fullscreen" }),
+            2000
+          );
+          displayMode = response?.result?.mode ?? displayMode;
+          if (displayMode !== "fullscreen") {
+            statusEl.textContent = "宿主没有展开面板——用面板右上角的展开按钮。";
+          }
+          render();
+        }
+
+        /** 工具回传的 structuredContent 就是完整账本，直接照着重渲染。 */
+        function applyState(payload) {
+          if (!payload) return;
+          if (payload.root) state.root = payload.root;
+          if (Array.isArray(payload.items)) state.items = payload.items;
+          if (Array.isArray(payload.types)) state.types = payload.types;
+          editing = null;
+          render();
+          if (typeof payload.message === "string" && payload.message) {
+            resultEl.textContent = payload.message;
+          }
+        }
+
+        async function call(name, args) {
+          const response = await request("tools/call", {
+            name,
+            arguments: { ...args, root: state.root ?? undefined }
+          });
+
+          if (response?.error) {
+            resultEl.textContent = `失败：${response.error.message}`;
+            return null;
+          }
+
+          const payload = response?.result?.structuredContent ?? null;
+          applyState(payload);
+          return payload;
+        }
+
+        async function save(item, statement, type) {
+          resultEl.textContent = "正在改…";
+          await call("align_edit", { id: item.id, statement, type });
+        }
+
+        async function retire(item) {
+          resultEl.textContent = "正在退休…";
+          await call("align_edit", { id: item.id, retire: true });
+        }
+
+        refreshEl.addEventListener("click", () => call("align_open_ledger", {}));
 
         window.addEventListener("message", (event) => {
           const data = event.data;
@@ -182,81 +324,14 @@
           }
 
           if (data.method === "ui/notifications/tool-result") {
-            const payload = data.params?.structuredContent;
-            if (!payload) return;
-            context.root = payload.root ?? null;
-            context.candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
-            context.types = Array.isArray(payload.types) ? payload.types : [];
-            context.suggested = payload.suggested ?? null;
-            renderCandidates();
-            updateLandState();
-          }
-        });
-
-        /**
-         * 需要复述的条目各发一条 ui/message 卡片：它立刻作为一条消息送达并触发模型一轮，
-         * 于是一次做两件事——触发复述，并把内容写进对话历史。
-         */
-        async function restateCards(created) {
-          const restating = created.filter((item) => item.restate === true);
-          if (restating.length === 0) return;
-
-          let sent = 0;
-          for (const item of restating) {
-            const label = context.types.find((type) => type.slug === item.type)?.label ?? item.type;
-            const response = await withTimeout(
-              request("ui/message", {
-                role: "user",
-                content: [
-                  {
-                    type: "text",
-                    text: `${item.statement}\n\n（align 把这条记为「${label}」${item.id}，需要你复述一遍。）`
-                  }
-                ]
-              }),
-              3000
-            );
-            if (!response?.error) sent += 1;
-          }
-
-          resultEl.textContent += `\n已发出 ${sent}/${restating.length} 条复述卡片。`;
-        }
-
-        landEl.addEventListener("click", async () => {
-          const items = collect();
-          if (items.length === 0) {
-            resultEl.textContent = "没有勾选任何条目，也没有新写的断言。";
+            applyState(data.params?.structuredContent);
             return;
           }
 
-          landEl.disabled = true;
-          resultEl.textContent = "正在写入…";
-
-          const response = await request("tools/call", {
-            name: "align_commit",
-            arguments: { items, root: context.root ?? undefined }
-          });
-
-          landEl.disabled = false;
-
-          if (response?.error) {
-            resultEl.textContent = `失败：${response.error.message}`;
-            return;
-          }
-
-          const created = response?.result?.structuredContent?.created ?? [];
-          resultEl.textContent = created.length
-            ? `已落地 ${created.length} 条：\n${created
-                .map((item) => `${item.id} · ${item.type} · ${item.statement}`)
-                .join("\n")}`
-            : "没有新增条目。";
-
-          // 落地后清空输入框：手写的那条已经收进去了。再落一次同一批内容是用户的
-          // 主观意愿，不拦——去重会让"确实想落两条一样的断言"变得做不到。
-          if (created.length > 0) {
-            draftEl.value = "";
-            updateLandState();
-            await restateCards(created);
+          // 宿主告诉我们展示方式变了（用户在 inline 与 fullscreen 之间切）。
+          if (data.method === "ui/notifications/host-context-changed") {
+            const next = data.params?.displayMode;
+            if (typeof next === "string") displayMode = next;
           }
         });
 
@@ -267,41 +342,39 @@
           ]);
         }
 
-        /** 没有宿主时别装作能用——把原因说出来，别让人对着一个死按钮猜。 */
+        /** 没有宿主时别装作能用——把原因说出来，别让人对着一堆死按钮猜。 */
         function noHost(message) {
           hostReady = false;
           statusEl.textContent = message;
-          landEl.disabled = true;
-          draftEl.disabled = true;
+          refreshEl.disabled = true;
+          render();
         }
-
-        draftEl.addEventListener("input", updateLandState);
 
         (async () => {
           if (window.parent === window) {
-            noHost("这里没有 MCP 宿主。这个面板只能在对话里由 align_review 打开，不能当普通网页打开。");
+            noHost("这里没有 MCP 宿主。这个面板要由 Agent 调 align_open_ledger 打开，不能当普通网页打开。");
             return;
           }
 
           const response = await withTimeout(
             request("ui/initialize", {
-              appInfo: { name: "align-panel", version: "0.0.1" },
+              appInfo: { name: "align-panel", version: "0.2.11" },
               appCapabilities: {},
               protocolVersion: "2025-11-21"
             }),
             2000
           );
 
-          const result = response?.result ?? {};
-          if (!result.protocolVersion) {
-            noHost("宿主没有回应握手。这个面板只能在对话里由 align_review 打开。");
+          if (!response?.result?.protocolVersion) {
+            noHost("宿主没有回应握手。这个面板要由 Agent 调 align_open_ledger 打开。");
             return;
           }
 
           hostReady = true;
-          statusEl.textContent = `已握手（${result.protocolVersion}）`;
           notify("ui/notifications/initialized", {});
-          updateLandState();
+          refreshEl.disabled = false;
+          render();
+          await openInSidePanel();
         })();
       })();
     </script>

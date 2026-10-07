@@ -1,6 +1,6 @@
 # 06 — 提升到项目层
 
-Status: open
+Status: wontfix
 Blocked by: 03, 04, 05
 Type: task
 
@@ -23,5 +23,8 @@ Type: task
 ## 上下文指针
 
 - `.scratch/align/spec.md` 的"成功标准"第 1 条
-- `GLOSSARY.md`：提升、项目层
+- `GLOSSARY.md`：作用域
 
+## 结论（2026-10-05）
+
+不做了。它依赖的 05（线程层落地）已作废，提升这个动作没有对象了——现在只有项目层一个作用域，"提升"从词汇表里移除。线程作用域将来若真的回来，再重新想它的入口。

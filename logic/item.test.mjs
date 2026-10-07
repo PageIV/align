@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createItem, nextId, oneLine, supersede } from "./item.mjs";
+import { createItem, nextId, oneLine, successorOf, supersede } from "./item.mjs";
 
 test("编号取最大值加一，不复用失效编号", () => {
   assert.equal(nextId([]), "C-001");
@@ -51,4 +51,12 @@ test("supersede 只改旧条目的状态，不删历史", () => {
   assert.equal(result[0].status, "superseded by C-002");
   assert.equal(result[1].status, "active");
   assert.equal(items[0].status, "active", "原数组不该被改");
+});
+
+test("successorOf 读得回取代者，别的失效原因读成 null", () => {
+  assert.equal(successorOf({ status: "superseded by C-014" }), "C-014");
+  assert.equal(successorOf({ status: "active" }), null);
+  assert.equal(successorOf({ status: "retired" }), null);
+  assert.equal(successorOf({}), null);
+  assert.equal(successorOf(null), null);
 });

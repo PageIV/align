@@ -1,6 +1,6 @@
 {
   "name": "align",
-  "version": "0.0.6",
+  "version": "0.2.11",
   "private": true,
   "type": "module",
   "description": "Codex plugin: interrogate an answer in a side chat, then land the confirmed items so later turns stay aligned.",
