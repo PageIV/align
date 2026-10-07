@@ -175,6 +175,13 @@
       }
       .aside[hidden] { display: none; }
 
+      .warn {
+        margin: 8px 0 0;
+        font-size: 11.5px;
+        line-height: 1.5;
+        color: var(--danger);
+      }
+
       .chips { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 7px; }
       .chip {
         font-size: 11px;
@@ -306,6 +313,8 @@
         let firstState = null;
         // 正在编辑的那条：{ id, statement, type }。null = 没有在编辑。
         let editing = null;
+        // 正在等"确认退休"的那条编号。null = 没有在等。
+        let confirming = null;
         let displayMode = "inline";
         const pending = new Map();
         const state = { root: null, items: [], types: [], active: 0, total: 0 };
@@ -399,10 +408,10 @@
 
             const actions = document.createElement("div");
             actions.className = "actions";
-            const confirm = button("取代", () => save(item, editing.statement, editing.type), !hostReady);
-            confirm.className = "primary";
+            const supersede = button("取代", () => save(item, editing.statement, editing.type), !hostReady);
+            supersede.className = "primary";
             actions.append(
-              confirm,
+              supersede,
               button("取消", () => {
                 editing = null;
                 render();
@@ -417,13 +426,42 @@
           statement.className = "statement";
           statement.textContent = item.statement;
 
+          // 退休不可逆，而且"退休"就挨着"改"，点错没有回头路——先要一次确认。
+          // 不用 window.confirm()：面板跑在宿主的沙箱 iframe 里，弹窗可能被直接挡掉，
+          // 那样这个按钮会变成"点了没反应"。
+          if (confirming === item.id) {
+            const warn = document.createElement("p");
+            warn.className = "warn";
+            warn.textContent = "退休不可逆：这条不再每轮注入，它会留在账本的历史里。";
+
+            const confirmActions = document.createElement("div");
+            confirmActions.className = "actions";
+            const yes = button("确认退休", () => retireItem(item), !hostReady);
+            yes.className = "danger";
+            confirmActions.append(
+              yes,
+              button("取消", () => {
+                confirming = null;
+                render();
+              })
+            );
+
+            card.append(meta, statement, warn, confirmActions);
+            return card;
+          }
+
           const actions = document.createElement("div");
           actions.className = "actions";
-          const retire = button("退休", () => retireItem(item), !hostReady);
+          const retire = button("退休", () => {
+            confirming = item.id;
+            setResult("");
+            render();
+          }, !hostReady);
           retire.className = "danger";
           actions.append(
             button("改", () => {
               editing = { id: item.id, statement: item.statement, type: item.type };
+              confirming = null;
               setResult("");
               render();
             }, !hostReady),
@@ -576,6 +614,7 @@
           if (Array.isArray(payload.types)) state.types = payload.types;
           if (payload.hotBlock) showHotBlockNote(payload.hotBlock);
           editing = null;
+          confirming = null;
           render();
 
           if (typeof payload.message === "string" && payload.message) {
@@ -670,7 +709,7 @@
 
           const response = await withTimeout(
             request("ui/initialize", {
-              appInfo: { name: "align-panel", version: "0.2.17" },
+              appInfo: { name: "align-panel", version: "0.2.18" },
               appCapabilities: {},
               protocolVersion: "2025-11-21"
             }),

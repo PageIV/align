@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { parseConfig } from "./config.mjs";
-import { buildLandingForm } from "./landing-form.mjs";
+import { buildLandingForm, readLandingAnswers } from "./landing-form.mjs";
 
 const CONFIG = parseConfig("");
 
@@ -81,4 +81,80 @@ test("没给建议时落到不落地，选项顺序跟着变", () => {
   assert.equal(choice.enum[0], "Ignore");
   assert.equal(choice.default, "Ignore");
   assert.deepEqual(new Set(choice.enum), new Set(["Align", "Restate", "Ignore"]));
+});
+
+// --- 回传怎么读 -------------------------------------------------------------
+
+function answers(candidates, content) {
+  const { slots } = form(candidates);
+  return readLandingAnswers(slots, content);
+}
+
+test("选 Align 的落地，选 Restate 的复述", () => {
+  const { chosen, restatements } = answers(
+    [
+      { statement: "甲。", type: "error-correction", destination: "land" },
+      { statement: "乙。", destination: "restate" }
+    ],
+    { c1: "Align", c2: "Restate" }
+  );
+
+  assert.deepEqual(chosen, [{ statement: "甲。", type: "error-correction", supersedes: "" }]);
+  assert.deepEqual(restatements, ["乙。"]);
+});
+
+test("没回传这个 key 就是没动过，按建议走", () => {
+  const land = answers([{ statement: "甲。", destination: "land" }], {});
+  assert.deepEqual(land.chosen.map((item) => item.statement), ["甲。"]);
+
+  const restate = answers([{ statement: "乙。", destination: "restate" }], {});
+  assert.deepEqual(restate.restatements, ["乙。"]);
+});
+
+test("选 Ignore 的两边都不进，什么都不写", () => {
+  const { chosen, restatements } = answers([{ statement: "甲。" }], { c1: "Ignore" });
+
+  assert.deepEqual(chosen, []);
+  assert.deepEqual(restatements, []);
+});
+
+test("认不出来的值退回不落地——少留痕比多留痕安全", () => {
+  const { chosen, restatements } = answers([{ statement: "甲。", destination: "land" }], {
+    c1: "随便什么"
+  });
+
+  assert.deepEqual(chosen, []);
+  assert.deepEqual(restatements, []);
+});
+
+test("回传带解释的整句也认（表单上显示的就是整句）", () => {
+  const { chosen } = answers([{ statement: "甲。" }], { c1: "Align · 写进账本，以后每轮带上" });
+
+  assert.deepEqual(chosen.map((item) => item.statement), ["甲。"]);
+});
+
+test("supersedes 跟着候选走，没写的补空串", () => {
+  const { chosen } = answers(
+    [
+      { statement: "新的。", destination: "land", supersedes: " C-001 " },
+      { statement: "另一条。", destination: "land" }
+    ],
+    { c1: "Align", c2: "Align" }
+  );
+
+  assert.deepEqual(chosen.map((item) => item.supersedes), ["C-001", ""]);
+});
+
+test("什么都没回传时按建议走，不是全丢", () => {
+  const { chosen, restatements } = answers(
+    [
+      { statement: "甲。", destination: "land" },
+      { statement: "乙。", destination: "restate" },
+      { statement: "丙。", destination: "ignore" }
+    ],
+    undefined
+  );
+
+  assert.deepEqual(chosen.map((item) => item.statement), ["甲。"]);
+  assert.deepEqual(restatements, ["乙。"]);
 });

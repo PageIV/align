@@ -23,6 +23,7 @@ import {
   DESTINATIONS,
   destinationChoice,
   destinationLabel,
+  destinationSlug,
   suggestionSlug
 } from "./destination.mjs";
 
@@ -69,4 +70,35 @@ export function buildLandingForm(candidates, config) {
   const message = candidates.length === 1 ? "这条去哪？" : "逐条选去哪";
 
   return { message, properties, slots };
+}
+/**
+ * 表单回传 → 决定：哪几条落地、哪几条复述。
+ *
+ * 两种"没动过"要分清：
+ * - 选择型字段**没有**回传这个 key（宿主不预选，见 buildLandingForm 的说明）→ 按建议走。
+ * - 回传了一个认不出来的值 → 退回 Ignore：少留痕比多留痕安全，而且 Ignore 是唯一
+ *   "点错了也看不出代价"的落点（destination.mjs 里写的兜底逻辑）。
+ */
+export function readLandingAnswers(slots, content) {
+  const chosen = [];
+  const restatements = [];
+
+  for (const { key, candidate, suggestion, type } of slots) {
+    const raw = content?.[key];
+    const picked = typeof raw === "string" && raw.trim() ? raw.trim() : destinationLabel(suggestion);
+    const destination = destinationSlug(picked);
+    const statement = String(candidate?.statement ?? "");
+
+    if (destination === "land") {
+      chosen.push({
+        statement,
+        type,
+        supersedes: typeof candidate?.supersedes === "string" ? candidate.supersedes.trim() : ""
+      });
+    } else if (destination === "restate") {
+      restatements.push(statement);
+    }
+  }
+
+  return { chosen, restatements };
 }

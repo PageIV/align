@@ -8,12 +8,8 @@ import { readFile } from "node:fs/promises";
 import { createInterface } from "node:readline";
 
 import { listTypes } from "../logic/config.mjs";
-import {
-  DESTINATIONS,
-  destinationLabel,
-  destinationSlug
-} from "../logic/destination.mjs";
-import { buildLandingForm } from "../logic/landing-form.mjs";
+import { DESTINATIONS } from "../logic/destination.mjs";
+import { buildLandingForm, readLandingAnswers } from "../logic/landing-form.mjs";
 import {
   addRestatements,
   commitItems,
@@ -473,26 +469,8 @@ async function callTool(name, params) {
         };
       }
 
-      const content = response?.content ?? {};
-      const chosen = [];
-      const restatements = [];
-
-      for (const { key, candidate, suggestion, type } of slots) {
-        // 空值按建议处理。宿主不预选选择型字段（见上面的说明），所以"没动过"在回传里就是
-        // 缺这个 key——用户不改就是同意模型的建议。
-        const raw = content[key];
-        const picked = typeof raw === "string" && raw.trim() ? raw.trim() : destinationLabel(suggestion);
-        const destination = destinationSlug(picked);
-
-        if (destination === "land") {
-          chosen.push({
-            statement: candidate.statement,
-            type,
-            supersedes: typeof candidate.supersedes === "string" ? candidate.supersedes.trim() : ""
-          });
-        }
-        else if (destination === "restate") restatements.push(candidate.statement);
-      }
+      // 回传的值怎么读，全在 logic/landing-form.mjs 的 readLandingAnswers 里——那里有测试。
+      const { chosen, restatements } = readLandingAnswers(slots, response?.content);
 
       if (chosen.length === 0 && restatements.length === 0) {
         return {
@@ -640,7 +618,7 @@ async function handle(message) {
           tools: { listChanged: false },
           resources: { subscribe: false, listChanged: false }
         },
-        serverInfo: { name: "align", version: "0.2.17" }
+        serverInfo: { name: "align", version: "0.2.18" }
       });
       return;
 
