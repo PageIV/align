@@ -140,7 +140,7 @@ npm test
 
 2026-10-07 删掉了另外两个探针——`probe_open_panel` + `ui/probe.html`（测 `ui/update-model-context` 与 `ui/message`），以及 `hooks/probe-inject.mjs`。理由是它们测的东西**已经没有调用者**：线程层作废了、复述改走收件箱、而"钩子还在不在跑"每轮都被注入末尾那行 `<!-- align:inject … -->` 本身证明着。留着一个可调用却没人该调的工具，迟早会被误调（C-007 的教训）。要复测面板，直接调 `align_open_ledger` 就是最真实的测试。
 
-宿主能力的实测结论记在 `.scratch/align/issues/11-host-capability-probe.md` 与 `12-hot-block-via-user-prompt-hook.md`；每条能改变做法的结论都同时进了 `ALIGNMENT.md`。
+宿主能力的实测结论记在 `.scratch/align/issues/11-host-capability-probe.md` 与 `12-hot-block-via-user-prompt-hook.md`；每条能改变做法的结论都同时进了 `ALIGNMENT.md`。为什么每轮注入走钩子而不是 `AGENTS.md` 受管区块，记在 `docs/adr/0002-per-turn-injection-via-user-prompt-hook.md`。
 
 ## 目录
 

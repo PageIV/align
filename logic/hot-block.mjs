@@ -10,6 +10,8 @@ import { isActive } from "./item.mjs";
 export const HOT_BLOCK_BEGIN = "<!-- align:begin -->";
 export const HOT_BLOCK_END = "<!-- align:end -->";
 
+// 热块上限的出厂默认值。**只在这里定义一次**：config.mjs 的 `DEFAULT_CONFIG` 从这里取。
+// 曾经两处各写一份 20，改一处不会同步另一处。
 export const DEFAULT_MAX_ITEMS = 20;
 
 export function renderHotBlock(items, { maxItems = DEFAULT_MAX_ITEMS } = {}) {

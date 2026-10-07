@@ -9,6 +9,8 @@
 //
 // 只认"顶层键 + [types.<slug>] 段"，够薄闭环用。
 
+import { DEFAULT_MAX_ITEMS } from "./hot-block.mjs";
+
 /** 出厂默认类型表。顺序就是账本与热块里的展示顺序。 */
 export const DEFAULT_TYPES = [
   { slug: "concept-alignment", label: "概念对齐" },
@@ -17,7 +19,8 @@ export const DEFAULT_TYPES = [
   { slug: "detail-completion", label: "细节填充" }
 ];
 
-export const DEFAULT_CONFIG = { hot_block_max_items: 20, types: {} };
+// 上限的默认值从热块那边取（renderHotBlock 用的就是这个数），不再在这里写第二份。
+export const DEFAULT_CONFIG = { hot_block_max_items: DEFAULT_MAX_ITEMS, types: {} };
 
 /** 已知类型列表。顺序稳定，标签回落成 slug。 */
 export function listTypes(config) {

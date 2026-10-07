@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { DEFAULT_CONFIG, listTypes, parseConfig, suggestedType } from "./config.mjs";
+import { DEFAULT_MAX_ITEMS } from "./hot-block.mjs";
 
 const SAMPLE = `
 # 类型只是标签：增删类型只改这里。
@@ -58,6 +59,12 @@ test("空输入回落到默认值：上限 + 四个默认类型", () => {
 test("改配置能换掉某个类型的标签", () => {
   const config = parseConfig('[types.concept-alignment]\nlabel = "对齐口径"\n');
   assert.equal(listTypes(config)[0].label, "对齐口径");
+});
+
+test("上限的默认值只有一个来源：热块的 DEFAULT_MAX_ITEMS", () => {
+  // 曾经 config.mjs 与 hot-block.mjs 各写一份 20，改一处不会同步另一处。
+  // 这条测试盯着它们不许再分家。
+  assert.equal(DEFAULT_CONFIG.hot_block_max_items, DEFAULT_MAX_ITEMS);
 });
 
 test("第五类只写在配置里就出现", () => {

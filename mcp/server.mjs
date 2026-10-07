@@ -596,12 +596,12 @@ async function handle(message) {
     case "initialize":
       hostCapabilities = params?.capabilities ?? null;
       result(id, {
-        protocolVersion: params?.protocolVersion ?? "2025-06-18",
+        protocolVersion: params?.protocolVersion ?? "2026-01-26",
         capabilities: {
           tools: { listChanged: false },
           resources: { subscribe: false, listChanged: false }
         },
-        serverInfo: { name: "align", version: "0.2.11" }
+        serverInfo: { name: "align", version: "0.2.12" }
       });
       return;
 

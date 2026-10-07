@@ -13,6 +13,7 @@ import {
   retireItem,
   reviseItem,
   takeRestatements,
+  writeInbox,
   writeSessionMarker
 } from "./store.mjs";
 
@@ -137,6 +138,22 @@ test("复述写进项目里的收件箱，投递一次就没了", async () => {
     taken.map((entry) => entry.text),
     ["把这段带回去。", "还有这段。"]
   );
+  assert.deepEqual(await readInbox(root), []);
+});
+
+test("收件箱投空之后，文件被摘掉——不留一个只有表头的空文件", async () => {
+  const root = await scratchDir();
+  await addRestatements(root, ["只此一条。"], { at: AT, session: "side-1" });
+  await takeRestatements(root, { session: "main-1", isMain: true });
+
+  await assert.rejects(() => stat(join(root, ".align", "inbox.md")), { code: "ENOENT" });
+  assert.deepEqual(await readInbox(root), [], "文件不在就是空收件箱");
+});
+
+test("本来就没有收件箱文件时，摘空也不报错", async () => {
+  const root = await scratchDir();
+  await writeInbox(root, []);
+
   assert.deepEqual(await readInbox(root), []);
 });
 

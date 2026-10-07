@@ -1,7 +1,7 @@
 // 项目层的读写。宿主无关：只有文件系统，没有 MCP、没有 Codex。
 
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { defaultConfig, parseConfig, resolveType, suggestedType } from "./config.mjs";
@@ -60,8 +60,17 @@ export async function readInbox(root) {
 
 export async function writeInbox(root, entries) {
   const base = normalizeRoot(root);
+  const file = join(base, INBOX_PATH);
+
+  // 空了就把文件摘掉，不留一个只有表头的空文件：.align/ 会跟着项目进 git，
+  // 别人 clone 下来不该白看见一个空收件箱。读到"文件不在"仍是空收件箱。
+  if (entries.length === 0) {
+    await rm(file, { force: true });
+    return;
+  }
+
   await mkdir(join(base, ".align"), { recursive: true });
-  await writeFile(join(base, INBOX_PATH), serializeInbox(entries), "utf8");
+  await writeFile(file, serializeInbox(entries), "utf8");
 }
 
 export async function addRestatements(root, texts, { at, session = "" } = {}) {

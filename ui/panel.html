@@ -4,91 +4,250 @@
     <meta charset="utf-8" />
     <title>align</title>
     <style>
-      :root { color-scheme: light dark; }
+      /* 主题用半透明灰而非写死的色值：宿主面板的底色不由我们定，灰在两个主题下都能落住。
+         唯一的彩色是强调色与"退休"的红——后者是因为退休不可逆，值得一个警告性的样子。 */
+      :root {
+        color-scheme: light dark;
+        --line: rgba(127, 127, 127, 0.28);
+        --line-strong: rgba(127, 127, 127, 0.48);
+        --fill: rgba(127, 127, 127, 0.10);
+        --fill-strong: rgba(127, 127, 127, 0.20);
+        --accent: #3f6fe0;
+        --accent-ring: rgba(63, 111, 224, 0.28);
+        --danger: #c0392b;
+        --radius: 10px;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --accent: #8fb0ff;
+          --accent-ring: rgba(143, 176, 255, 0.30);
+          --danger: #ff9a8f;
+        }
+      }
+
       * { box-sizing: border-box; }
       body {
         margin: 0;
-        padding: 12px;
-        font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        padding: 14px 14px 20px;
+        font: 13px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        -webkit-font-smoothing: antialiased;
       }
-      header { display: flex; align-items: baseline; gap: 8px; }
-      h1 { font-size: 14px; margin: 0; flex: 1; }
-      h2 { font-size: 12px; margin: 16px 0 6px; opacity: 0.65; font-weight: 600; }
-      .muted { opacity: 0.7; margin: 4px 0; font-size: 12px; }
-      .item {
-        padding: 8px;
-        border: 1px solid rgba(127, 127, 127, 0.3);
+      header { display: flex; align-items: center; gap: 9px; }
+      .mark {
+        display: grid;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        border-radius: 7px;
+        background: var(--fill-strong);
+        color: var(--accent);
+        flex: none;
+      }
+      h1 { font-size: 13.5px; font-weight: 650; margin: 0; flex: 1; letter-spacing: 0.01em; }
+      h2 {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        opacity: 0.55;
+        margin: 20px 0 8px;
+      }
+      h2 .n {
+        font-variant-numeric: tabular-nums;
+        letter-spacing: normal;
+        font-size: 10.5px;
+        padding: 1px 6px;
+        border-radius: 999px;
+        background: var(--fill);
+        opacity: 0.9;
+      }
+      h2 .n:empty { display: none; }
+
+      .notice {
+        margin: 12px 0 0;
+        padding: 9px 10px;
+        border: 1px solid var(--line);
         border-radius: 8px;
+        background: var(--fill);
+        font-size: 12px;
+        word-break: break-word;
+      }
+      .notice[hidden] { display: none; }
+
+      .item {
+        position: relative;
+        padding: 10px 11px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
         margin-bottom: 8px;
         word-break: break-word;
       }
-      .item.inactive { opacity: 0.6; }
-      .meta { display: flex; gap: 6px; font-size: 11px; opacity: 0.75; margin-bottom: 4px; }
-      .meta .id { font-variant-numeric: tabular-nums; }
+      .item.editing {
+        border-color: var(--accent);
+        background: var(--fill);
+        box-shadow: 0 0 0 2px var(--accent-ring);
+      }
+      .item.inactive {
+        border-style: dashed;
+        opacity: 0.72;
+      }
+
+      .meta {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        font-size: 11px;
+        margin-bottom: 6px;
+      }
+      .meta .id {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.02em;
+        padding: 2px 6px;
+        border-radius: 5px;
+        background: var(--fill);
+      }
+      .meta .type {
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        opacity: 0.85;
+      }
+      .meta .state {
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--fill);
+        opacity: 0.85;
+      }
+      .meta .date {
+        color: inherit;
+        opacity: 0.6;
+        font-variant-numeric: tabular-nums;
+      }
+
       .statement { margin: 0; overflow-wrap: anywhere; }
-      .actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
-      .chips { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
+
+      .actions { display: flex; gap: 6px; margin-top: 9px; flex-wrap: wrap; }
       button {
-        font: inherit;
+        font-family: inherit;
         font-size: 12px;
-        padding: 4px 10px;
-        border-radius: 6px;
-        border: 1px solid currentColor;
+        line-height: 1.2;
+        font-weight: 500;
+        padding: 5px 11px;
+        border-radius: 7px;
+        border: 1px solid var(--line-strong);
         background: transparent;
         color: inherit;
         cursor: pointer;
+        transition: background 0.12s ease, border-color 0.12s ease;
       }
-      button:hover:not(:disabled) { background: rgba(127, 127, 127, 0.15); }
+      button:hover:not(:disabled) { background: var(--fill-strong); }
       button:disabled { opacity: 0.45; cursor: default; }
+      button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+      button.primary {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--fill);
+      }
+      button.primary:hover:not(:disabled) { background: var(--accent-ring); }
+      button.danger { border-color: var(--danger); color: var(--danger); }
+      button.danger:hover:not(:disabled) { background: var(--accent-ring); }
+      #refresh { flex: none; opacity: 0.85; }
+
+      .chips { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 7px; }
       .chip {
         font-size: 11px;
-        padding: 3px 9px;
+        padding: 4px 10px;
         border-radius: 999px;
-        opacity: 0.7;
+        border: 1px solid var(--line);
+        opacity: 0.72;
       }
       .chip.on {
         opacity: 1;
-        background: rgba(127, 127, 127, 0.22);
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--fill);
       }
+
       textarea {
         width: 100%;
-        font: inherit;
-        padding: 6px;
-        border-radius: 6px;
-        border: 1px solid rgba(127, 127, 127, 0.4);
+        font-family: inherit;
+        font-size: 12.5px;
+        line-height: 1.5;
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid var(--line-strong);
         /* 别用 transparent：宿主 iframe 里的底色不由我们定，透明会让文字和背景撞色。 */
-        background-color: rgba(127, 127, 127, 0.12);
+        background-color: var(--fill);
         color: inherit;
+        min-height: 60px;
+        resize: vertical;
+        margin-bottom: 7px;
       }
-      textarea { min-height: 56px; resize: vertical; margin-bottom: 6px; }
+      textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-ring);
+      }
+
+      .empty {
+        padding: 16px 12px;
+        text-align: center;
+        border: 1px dashed var(--line);
+        border-radius: var(--radius);
+        font-size: 12px;
+        opacity: 0.7;
+        margin: 0;
+      }
+
       .result:empty { display: none; }
       .result {
-        margin-top: 12px;
-        padding: 8px;
-        border-radius: 6px;
-        background: rgba(127, 127, 127, 0.12);
+        margin-top: 14px;
+        padding: 9px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--fill);
         font-size: 12px;
         white-space: pre-wrap;
         word-break: break-word;
       }
-      .hint { font-size: 11px; opacity: 0.65; margin-top: 10px; }
-      code { font-size: 11px; }
+      .result.error { border-color: var(--danger); color: var(--danger); }
+
+      .hint { font-size: 11px; line-height: 1.6; opacity: 0.6; margin-top: 16px; }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 10.5px;
+        padding: 1px 4px;
+        border-radius: 4px;
+        background: var(--fill);
+      }
     </style>
   </head>
   <body>
     <header>
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+             stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3.5" y="4.5" width="17" height="15" rx="3.5"></rect>
+          <path d="M7.5 9.5h9M7.5 13h5.5"></path>
+        </svg>
+      </span>
       <h1>对齐账本</h1>
       <button id="refresh" disabled>刷新</button>
     </header>
-    <p class="muted" id="status">正在与宿主握手…</p>
+
+    <p class="notice" id="notice">正在与宿主握手…</p>
 
     <section>
-      <h2>生效中</h2>
+      <h2>生效中 <span class="n" id="activeCount"></span></h2>
       <div id="active"></div>
     </section>
 
     <section id="inactiveSection" hidden>
-      <h2>已失效</h2>
+      <h2>已失效 <span class="n" id="inactiveCount"></span></h2>
       <div id="inactive"></div>
     </section>
 
@@ -100,10 +259,12 @@
 
     <script>
       (() => {
-        const statusEl = document.getElementById("status");
+        const noticeEl = document.getElementById("notice");
         const activeEl = document.getElementById("active");
         const inactiveEl = document.getElementById("inactive");
         const inactiveSection = document.getElementById("inactiveSection");
+        const activeCountEl = document.getElementById("activeCount");
+        const inactiveCountEl = document.getElementById("inactiveCount");
         const refreshEl = document.getElementById("refresh");
         const resultEl = document.getElementById("result");
 
@@ -141,6 +302,16 @@
           return item.status;
         }
 
+        function setNotice(text) {
+          noticeEl.textContent = text ?? "";
+          noticeEl.hidden = !text;
+        }
+
+        function setResult(text, isError = false) {
+          resultEl.textContent = text ?? "";
+          resultEl.className = isError ? "result error" : "result";
+        }
+
         function button(text, handler, disabled = false) {
           const el = document.createElement("button");
           el.textContent = text;
@@ -149,17 +320,28 @@
           return el;
         }
 
-        function renderActiveItem(item) {
-          const card = document.createElement("article");
-          card.className = "item";
-
+        /** 条目头上那一行：编号、类型或状态、日期。 */
+        function metaRow(parts) {
           const meta = document.createElement("div");
           meta.className = "meta";
-          for (const text of [item.id, labelOf(item.type), item.date]) {
+          for (const [className, text] of parts) {
             const span = document.createElement("span");
+            span.className = className;
             span.textContent = text;
             meta.append(span);
           }
+          return meta;
+        }
+
+        function renderActiveItem(item) {
+          const card = document.createElement("article");
+          card.className = editing?.id === item.id ? "item editing" : "item";
+
+          const meta = metaRow([
+            ["id", item.id],
+            ["type", labelOf(item.type)],
+            ["date", item.date]
+          ]);
 
           if (editing?.id === item.id) {
             const box = document.createElement("textarea");
@@ -183,8 +365,10 @@
 
             const actions = document.createElement("div");
             actions.className = "actions";
+            const confirm = button("取代", () => save(item, editing.statement, editing.type), !hostReady);
+            confirm.className = "primary";
             actions.append(
-              button("保存（取代）", () => save(item, editing.statement, editing.type), !hostReady),
+              confirm,
               button("取消", () => {
                 editing = null;
                 render();
@@ -201,13 +385,15 @@
 
           const actions = document.createElement("div");
           actions.className = "actions";
+          const retire = button("退休", () => retireItem(item), !hostReady);
+          retire.className = "danger";
           actions.append(
             button("改", () => {
               editing = { id: item.id, statement: item.statement, type: item.type };
-              resultEl.textContent = "";
+              setResult("");
               render();
             }, !hostReady),
-            button("退休", () => retire(item), !hostReady)
+            retire
           );
 
           card.append(meta, statement, actions);
@@ -218,19 +404,19 @@
           const card = document.createElement("article");
           card.className = "item inactive";
 
-          const meta = document.createElement("div");
-          meta.className = "meta";
-          for (const text of [item.id, statusText(item), item.date]) {
-            const span = document.createElement("span");
-            span.textContent = text;
-            meta.append(span);
-          }
+          card.append(
+            metaRow([
+              ["id", item.id],
+              ["state", statusText(item)],
+              ["date", item.date]
+            ])
+          );
 
           const statement = document.createElement("p");
           statement.className = "statement";
           statement.textContent = item.statement;
 
-          card.append(meta, statement);
+          card.append(statement);
           return card;
         }
 
@@ -243,7 +429,7 @@
 
           if (active.length === 0) {
             const empty = document.createElement("p");
-            empty.className = "muted";
+            empty.className = "empty";
             empty.textContent = "还没有生效的已确认项。";
             activeEl.append(empty);
           } else {
@@ -254,7 +440,8 @@
           for (const item of inactive) inactiveEl.append(renderInactiveItem(item));
 
           if (hostReady) {
-            statusEl.textContent = `生效 ${active.length} 条 · 已失效 ${inactive.length} 条`;
+            activeCountEl.textContent = String(active.length);
+            inactiveCountEl.textContent = inactive.length === 0 ? "" : String(inactive.length);
           }
         }
 
@@ -266,7 +453,7 @@
           );
           displayMode = response?.result?.mode ?? displayMode;
           if (displayMode !== "fullscreen") {
-            statusEl.textContent = "宿主没有展开面板——用面板右上角的展开按钮。";
+            setNotice("宿主没有展开面板——用面板右上角的展开按钮。");
           }
           render();
         }
@@ -280,7 +467,7 @@
           editing = null;
           render();
           if (typeof payload.message === "string" && payload.message) {
-            resultEl.textContent = payload.message;
+            setResult(payload.message);
           }
         }
 
@@ -291,7 +478,7 @@
           });
 
           if (response?.error) {
-            resultEl.textContent = `失败：${response.error.message}`;
+            setResult(`失败：${response.error.message}`, true);
             return null;
           }
 
@@ -301,12 +488,12 @@
         }
 
         async function save(item, statement, type) {
-          resultEl.textContent = "正在改…";
+          setResult("正在改…");
           await call("align_edit", { id: item.id, statement, type });
         }
 
-        async function retire(item) {
-          resultEl.textContent = "正在退休…";
+        async function retireItem(item) {
+          setResult("正在退休…");
           await call("align_edit", { id: item.id, retire: true });
         }
 
@@ -345,7 +532,7 @@
         /** 没有宿主时别装作能用——把原因说出来，别让人对着一堆死按钮猜。 */
         function noHost(message) {
           hostReady = false;
-          statusEl.textContent = message;
+          setNotice(message);
           refreshEl.disabled = true;
           render();
         }
@@ -358,7 +545,7 @@
 
           const response = await withTimeout(
             request("ui/initialize", {
-              appInfo: { name: "align-panel", version: "0.2.11" },
+              appInfo: { name: "align-panel", version: "0.2.12" },
               appCapabilities: {},
               protocolVersion: "2025-11-21"
             }),
@@ -373,6 +560,7 @@
           hostReady = true;
           notify("ui/notifications/initialized", {});
           refreshEl.disabled = false;
+          setNotice("");
           render();
           await openInSidePanel();
         })();
