@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/opt/homebrew/bin/node \"${PLUGIN_ROOT}/hooks/inject-hot-block.mjs\""
+            "command": "/bin/sh \"${PLUGIN_ROOT}/scripts/run-node.sh\" \"${PLUGIN_ROOT}/hooks/inject-hot-block.mjs\""
           }
         ]
       }

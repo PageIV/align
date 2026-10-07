@@ -102,6 +102,16 @@ label = "新花样"
 
 （曾经有一条 `restate` 类型策略——`restate = true` 的类型落地后触发复述。随工单 15 退役：一条命令式的断言落进账本会变成每轮重复一道命令，所以改用"目的地"来分流。老配置里残留的 `restate = true` 被当作陌生键忽略，不报错。）
 
+## 需要 node（≥18）
+
+插件有两处要自己拉起 node：每轮注入的钩子，和 MCP server。宿主从 Dock 启动时的 PATH 是 launchd 那一套（`/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`），**Homebrew 的 `/opt/homebrew/bin` 不在里头**，所以不能裸写 `node`。
+
+两处都不写死路径，改走 [`scripts/run-node.sh`](scripts/run-node.sh)，按固定顺序找：`$ALIGN_NODE` → `/opt/homebrew/bin` → `/usr/local/bin` → nvm 里最新的 → Volta / asdf / fnm → 宿主 PATH → 应用自带的 node。找到就 `exec`。
+
+- 换机器、换 node 管理器，**不用改配置**。
+- 想钉住某一个：设 `ALIGN_NODE=/path/to/node`（设了就用它，不再往下猜）。
+- **一个都找不到时**，它往 `/tmp/align-node.log` 留一行（写着找过哪儿），然后以退出码 0 结束——钩子绝不能挡住提问。那个文件同时也记着"上一次用的是哪个 node、什么版本"，所以插件没反应时先看它。
+
 ## 开发
 
 插件以本地 marketplace 的方式加载，`plugins/align` 是指向本仓库的符号链接：
@@ -161,6 +171,7 @@ npm test
 .mcp.json                   MCP server 启动方式
 hooks/hooks.json            钩子声明（UserPromptSubmit）
 hooks/inject-hot-block.mjs  每轮注入 + 投递收件箱 + 记"这一轮在哪"
+scripts/run-node.sh         两个入口共用的 node 启动壳（找不到 node 也不会挡住提问）
 skills/align/SKILL.md       侧聊入口与纪律（主 Agent 读的那一份）
 skills/align-now/SKILL.md   手动入口：直接弹落地表单
 skills/align-ledger/SKILL.md 手动入口：直接开账本面板

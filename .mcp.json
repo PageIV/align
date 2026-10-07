@@ -1,8 +1,9 @@
 {
   "mcpServers": {
     "align": {
-      "command": "/opt/homebrew/bin/node",
+      "command": "/bin/sh",
       "args": [
+        "./scripts/run-node.sh",
         "./mcp/server.mjs"
       ],
       "cwd": ".",
